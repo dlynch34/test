@@ -1,33 +1,30 @@
-Write-Host  -ForegroundColor Cyan "Starting SeguraOSD's Custom OSDCloud ..."
-Start-Sleep -Seconds 5
+Write-Host -ForegroundColor Cyan "Starting Serco's OSDCloud Provisioning ..."
+Start-Sleep -Seconds 3
 
-#Change Display Resolution for Virtual Machine
+# Set Display Resolution for VMs
 if ((Get-MyComputerModel) -match 'Virtual') {
-    Write-Host  -ForegroundColor Cyan "Setting Display Resolution to 1600x"
+    Write-Host -ForegroundColor Cyan "Detected Virtual Machine. Setting Display Resolution to 1600x"
     Set-DisRes 1600
 }
 
-#Make sure I have the latest OSD Content
-Write-Host  -ForegroundColor Cyan "Updating the awesome OSD PowerShell Module"
+# Ensure latest OSD module
+Write-Host -ForegroundColor Cyan "Updating OSD PowerShell Module..."
 Install-Module OSD -Force
 
-Write-Host  -ForegroundColor Cyan "Importing the sweet OSD PowerShell Module"
+Write-Host -ForegroundColor Cyan "Importing OSD PowerShell Module..."
 Import-Module OSD -Force
 
-#TODO: Spend the time to write a function to do this and put it here
-Write-Host  -ForegroundColor Cyan "Ejecting ISO"
-Write-Warning "That didn't work because I haven't coded it yet!"
-#Start-Sleep -Seconds 5
+# Optional: Custom logging or setup steps can go here
 
-#Start OSDCloud ZTI the RIGHT way
-Write-Host  -ForegroundColor Cyan "Start OSDCloud with MY Parameters"
+# Begin Zero Touch Deployment
+Write-Host -ForegroundColor Cyan "Launching OSDCloud ZTI for Serco"
 Start-OSDCloud -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -ZTI
 
-#Anything I want  can go right here and I can change it at any time since it is in the Cloud!!!!!
-Write-Host  -ForegroundColor Cyan "Starting OSDCloud PostAction ..."
-Write-Warning "I'm not sure of what to put here yet"
+# Optional Post Actions
+Write-Host -ForegroundColor Cyan "Running PostAction (placeholder)"
+# e.g. Set registry keys, prepare for Intune, log status, etc.
 
-#Restart from WinPE
-Write-Host  -ForegroundColor Cyan "Restarting in 20 seconds!"
+# Restart after completion
+Write-Host -ForegroundColor Yellow "Deployment Complete. Rebooting in 20 seconds..."
 Start-Sleep -Seconds 20
 wpeutil reboot
