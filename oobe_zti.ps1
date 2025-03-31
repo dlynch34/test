@@ -1,156 +1,82 @@
-#================================================
-#   [PreOS] Update Module
-#================================================
-if ((Get-MyComputerModel) -match 'Virtual') {
-    Write-Host  -ForegroundColor Green "Setting Display Resolution to 1600x"
-    Set-DisRes 1600
+[CmdletBinding()]
+param()
+
+$ScriptName = 'sandbox.osdcloud.com'
+$ScriptVersion = '23.6.10.1'
+
+#region Initialize
+$Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$ScriptName.log"
+$null = Start-Transcript -Path (Join-Path "$env:SystemRoot\Temp" $Transcript) -ErrorAction Ignore
+
+if ($env:SystemDrive -eq 'X:') {
+    $WindowsPhase = 'WinPE'
+}
+else {
+    $ImageState = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State' -ErrorAction Ignore).ImageState
+    if ($env:UserName -eq 'defaultuser0') {$WindowsPhase = 'OOBE'}
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_OOBE') {$WindowsPhase = 'Specialize'}
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_AUDIT') {$WindowsPhase = 'AuditMode'}
+    else {$WindowsPhase = 'Windows'}
 }
 
-Write-Host -ForegroundColor Green "Updating OSD PowerShell Module"
-Install-Module OSD -Force
+Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
+Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+#endregion
 
-Write-Host  -ForegroundColor Green "Importing OSD PowerShell Module"
-Import-Module OSD -Force   
-
-#=======================================================================
-#   [OS] Params and Start-OSDCloud
-#=======================================================================
-$Params = @{
-    OSVersion = "Windows 11"
-    OSBuild = "24H2"
-    OSEdition = "Enterprise"
-    OSLanguage = "en-us"
-    OSLicense = "Volume"
-    ZTI = $true
-    Firmware = $false
+#region Admin Elevation
+$whoiam = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$isElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if ($isElevated) {
+    Write-Host -ForegroundColor Green "[+] Running as $whoiam (Admin Elevated)"
+} else {
+    Write-Host -ForegroundColor Red "[!] Running as $whoiam (NOT Admin Elevated)"
+    break
 }
-Start-OSDCloud @Params
+#endregion
 
-#================================================
-#  [PostOS] OOBEDeploy Configuration
-#================================================
-Write-Host -ForegroundColor Green "Create C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json"
-$OOBEDeployJson = @'
-{
-    "AddNetFX3":  {
-                      "IsPresent":  true
-                  },
-    "Autopilot":  {
-                      "IsPresent":  false
-                  },
-    "RemoveAppx":  [
-                    "MicrosoftTeams",
-                    "Microsoft.BingWeather",
-                    "Microsoft.BingNews",
-                    "Microsoft.GamingApp",
-                    "Microsoft.GetHelp",
-                    "Microsoft.Getstarted",
-                    "Microsoft.Messaging",
-                    "Microsoft.MicrosoftOfficeHub",
-                    "Microsoft.MicrosoftSolitaireCollection",
-                    "Microsoft.MicrosoftStickyNotes",
-                    "Microsoft.MSPaint",
-                    "Microsoft.People",
-                    "Microsoft.PowerAutomateDesktop",
-                    "Microsoft.StorePurchaseApp",
-                    "Microsoft.Todos",
-                    "microsoft.windowscommunicationsapps",
-                    "Microsoft.WindowsFeedbackHub",
-                    "Microsoft.WindowsMaps",
-                    "Microsoft.WindowsSoundRecorder",
-                    "Microsoft.Xbox.TCUI",
-                    "Microsoft.XboxGameOverlay",
-                    "Microsoft.XboxGamingOverlay",
-                    "Microsoft.XboxIdentityProvider",
-                    "Microsoft.XboxSpeechToTextOverlay",
-                    "Microsoft.YourPhone",
-                    "Microsoft.ZuneMusic",
-                    "Microsoft.ZuneVideo"
-                   ],
-    "UpdateDrivers":  {
-                          "IsPresent":  true
-                      },
-    "UpdateWindows":  {
-                          "IsPresent":  true
-                      }
+#region TLS 1.2
+Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+#endregion
+
+#region WinPE Phase
+if ($WindowsPhase -eq 'WinPE') {
+    osdcloud-StartWinPE -OSDCloud -KeyVault
+    Write-Host -ForegroundColor Cyan "To start a new PowerShell session, type 'start powershell'"
+    Write-Host -ForegroundColor Cyan "Run Start-OSDCloud, Start-OSDCloudGUI, or Start-OSDCloudAzure in the new session."
+    $null = Stop-Transcript -ErrorAction Ignore
 }
-'@
-If (!(Test-Path "C:\ProgramData\OSDeploy")) {
-    New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
+#endregion
+
+#region Specialize Phase
+if ($WindowsPhase -eq 'Specialize') {
+    $null = Stop-Transcript -ErrorAction Ignore
 }
-$OOBEDeployJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json" -Encoding ascii -Force
+#endregion
 
-#================================================
-#  [PostOS] AutopilotOOBE Configuration Staging
-#================================================
-Write-Host -ForegroundColor Green "Define Computername:"
-
-# Serco logic: use LPG+Serial or DSG+Serial
-$Serial = (Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim()
-$Prefix = if (Get-CimInstance Win32_Battery) { "LPG" } else { "DSG" }
-$MaxLen = 15 - $Prefix.Length
-$SerialTrimmed = if ($Serial.Length -gt $MaxLen) { $Serial.Substring(0, $MaxLen) } else { $Serial }
-$AssignedComputerName = "$Prefix$SerialTrimmed"
-Write-Host -ForegroundColor Red $AssignedComputerName
-Write-Host ""
-
-Write-Host -ForegroundColor Green "Create C:\ProgramData\OSDeploy\OSDeploy.AutopilotOOBE.json"
-$AutopilotOOBEJson = @"
-{
-    "AssignedComputerName" : "$AssignedComputerName",
-    "AddToGroup":  "AADGroupX",
-    "Assign":  {
-                   "IsPresent":  true
-               },
-    "GroupTag":  "GroupTagXXX",
-    "Hidden":  [
-                   "AddToGroup",
-                   "AssignedUser",
-                   "PostAction",
-                   "GroupTag",
-                   "Assign"
-               ],
-    "PostAction":  "Quit",
-    "Run":  "NetworkingWireless",
-    "Docs":  "https://google.com/",
-    "Title":  "Autopilot Manual Register"
+#region AuditMode Phase
+if ($WindowsPhase -eq 'AuditMode') {
+    $null = Stop-Transcript -ErrorAction Ignore
 }
-"@
+#endregion
 
-If (!(Test-Path "C:\ProgramData\OSDeploy")) {
-    New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
+#region OOBE Phase
+if ($WindowsPhase -eq 'OOBE') {
+    # Set default language, region, and keyboard layout (hardcoded)
+    $env:OSDCloudLanguage = 'en-US'
+    $env:OSDCloudRegion   = 'US'
+    $env:OSDCloudKeyboard = '0409:00000409'
+
+    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -KeyVault -InstallWinGet -WinGetUpgrade -WinGetPwsh
+    $null = Stop-Transcript -ErrorAction Ignore
 }
-$AutopilotOOBEJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.AutopilotOOBE.json" -Encoding ascii -Force
+#endregion
 
-#================================================
-#  [PostOS] AutopilotOOBE CMD Command Line
-#================================================
-Write-Host -ForegroundColor Green "Create C:\Windows\System32\Scripts\OOBE.cmd"
-$OOBECMD = @'
-PowerShell -NoL -Com Set-ExecutionPolicy RemoteSigned -Force
-Set Path = %PATH%;C:\Program Files\WindowsPowerShell\Scripts
-Start /Wait PowerShell -NoL -C Install-Module AutopilotOOBE -Force -Verbose
-Start /Wait PowerShell -NoL -C Install-Module OSD -Force -Verbose
-Start /Wait PowerShell -NoL -C Invoke-WebPSScript https://raw.githubusercontent.com/dlynch34/test/blob/main/USKeyboard.ps1
-Start /Wait PowerShell -NoL -C Invoke-WebPSScript https://check-autopilotprereq.osdcloud.ch
-Start /Wait PowerShell -NoL -C Invoke-WebPSScript https://start-autopilotoobe.osdcloud.ch
-Start /Wait PowerShell -NoL -C Start-OOBEDeploy
-Start /Wait PowerShell -NoL -C Invoke-WebPSScript https://tpm.osdcloud.ch
-Start /Wait PowerShell -NoL -C Invoke-WebPSScript https://cleanup.osdcloud.ch
-Start /Wait PowerShell -NoL -C Restart-Computer -Force
-'@
-$OOBECMD | Out-File -FilePath 'C:\Windows\System32\OOBE.cmd' -Encoding ascii -Force
-
-#================================================
-#  [PostOS] SetupComplete CMD Command Line
-#================================================
-Write-Host -ForegroundColor Green "Create C:\Windows\Setup\Scripts\SetupComplete.cmd"
-$SetupCompleteCMD = @'
-powershell.exe -Command Set-ExecutionPolicy RemoteSigned -Force
-powershell.exe -Command "& {IEX (IRM oobetasks.osdcloud.ch)}"
-'@
-$SetupCompleteCMD | Out-File -FilePath 'C:\Windows\Setup\Scripts\SetupComplete.cmd' -Encoding ascii -Force
-
+#region Full Windows Phase
+if ($WindowsPhase -eq 'Windows') {
+    $null = Stop-Transcript -ErrorAction Ignore
+}
+#endregion
 #=======================================================================
 #   Restart-Computer
 #=======================================================================
