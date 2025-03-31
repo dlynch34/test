@@ -98,7 +98,7 @@ Write-Host -ForegroundColor Green "Create C:\ProgramData\OSDeploy\OSDeploy.Autop
 $AutopilotOOBEJson = @"
 {
     "AssignedComputerName" : "$AssignedComputerName",
-    "AddToGroup":  "AADGroupX",
+    "AddToGroup":  "SG-G-HealthlyDeviceConfiguration",
     "Assign":  {
                    "IsPresent":  true
                },
