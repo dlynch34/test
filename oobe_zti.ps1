@@ -42,10 +42,10 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud -KeyVault
-    Write-Host -ForegroundColor Cyan "To start a new PowerShell session, type 'start powershell'"
-    Write-Host -ForegroundColor Cyan "Run Start-OSDCloud, Start-OSDCloudGUI, or Start-OSDCloudAzure in the new session."
+    Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
     $null = Stop-Transcript -ErrorAction Ignore
 }
+
 #endregion
 
 #region Specialize Phase
