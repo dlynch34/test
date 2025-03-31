@@ -20,7 +20,7 @@ else {
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
-Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
 #endregion
 
 #region Admin Elevation
@@ -41,11 +41,10 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
-    osdcloud-StartWinPE -OSDCloud -KeyVault
+    osdcloud-StartWinPE -OSDCloud
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
     $null = Stop-Transcript -ErrorAction Ignore
 }
-
 #endregion
 
 #region Specialize Phase
@@ -62,12 +61,59 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    # Set default language, region, and keyboard layout (hardcoded)
-    $env:OSDCloudLanguage = 'en-US'
-    $env:OSDCloudRegion   = 'US'
-    $env:OSDCloudKeyboard = '0409:00000409'
+    Write-Host -ForegroundColor Green "Creating OSDeploy.OOBEDeploy.json with language and regional settings..."
+    $OOBEDeployJson = @'
+{
+    "AddNetFX3": { "IsPresent": true },
+    "Autopilot": { "IsPresent": false },
+    "SetLanguage": {
+        "GeoID": 244,
+        "InputLocale": "en-US",
+        "SystemLocale": "en-US",
+        "UILanguage": "en-US",
+        "UserLocale": "en-US",
+        "TimeZone": "Eastern Standard Time"
+    },
+    "RemoveAppx": [
+        "MicrosoftTeams",
+        "Microsoft.BingWeather",
+        "Microsoft.BingNews",
+        "Microsoft.GamingApp",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.Messaging",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.MSPaint",
+        "Microsoft.People",
+        "Microsoft.PowerAutomateDesktop",
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.Todos",
+        "microsoft.windowscommunicationsapps",
+        "Microsoft.WindowsFeedbackHub",
+        "Microsoft.WindowsMaps",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.YourPhone",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo"
+    ],
+    "UpdateDrivers": { "IsPresent": true },
+    "UpdateWindows": { "IsPresent": true }
+}
+'@
 
-    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -KeyVault -InstallWinGet -WinGetUpgrade -WinGetPwsh
+    if (!(Test-Path "C:\ProgramData\OSDeploy")) {
+        New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
+    }
+    $OOBEDeployJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json" -Encoding ascii -Force
+
+    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -InstallWinGet -WinGetUpgrade -WinGetPwsh
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
@@ -77,6 +123,7 @@ if ($WindowsPhase -eq 'Windows') {
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
+
 #=======================================================================
 #   Restart-Computer
 #=======================================================================
