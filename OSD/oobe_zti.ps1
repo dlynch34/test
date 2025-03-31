@@ -1,3 +1,4 @@
+
 [CmdletBinding()]
 param()
 
@@ -43,6 +44,27 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
+
+    # === OOBE.cmd Injection Logic ===
+    Write-Host -ForegroundColor Cyan "Injecting OOBE.cmd to re-run this script post-reboot..."
+
+    $TargetScriptPath = "C:\OSDCloud\Scripts\sandbox.ps1"
+    $TargetOOBECmd    = "C:\Windows\System32\OOBE.cmd"
+
+    # Ensure folders exist
+    New-Item -ItemType Directory -Path (Split-Path $TargetScriptPath) -Force | Out-Null
+    New-Item -ItemType Directory -Path (Split-Path $TargetOOBECmd) -Force | Out-Null
+
+    # Save this script to disk
+    $MyRawScript = Get-Content -LiteralPath $MyInvocation.MyCommand.Path -Raw
+    $MyRawScript | Out-File -FilePath $TargetScriptPath -Encoding ascii -Force
+
+    # Create OOBE.cmd to re-run it
+    $OOBECmdContent = "@echo off`nPowerShell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$TargetScriptPath`""
+    $OOBECmdContent | Out-File -FilePath $TargetOOBECmd -Encoding ascii -Force
+
+    Write-Host -ForegroundColor Green "OOBE.cmd created at $TargetOOBECmd"
+
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
