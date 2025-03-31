@@ -1,4 +1,3 @@
-
 [CmdletBinding()]
 param()
 
@@ -14,10 +13,10 @@ if ($env:SystemDrive -eq 'X:') {
 }
 else {
     $ImageState = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\State' -ErrorAction Ignore).ImageState
-    if ($env:UserName -eq 'defaultuser0') {$WindowsPhase = 'OOBE'}
-    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_OOBE') {$WindowsPhase = 'Specialize'}
-    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_AUDIT') {$WindowsPhase = 'AuditMode'}
-    else {$WindowsPhase = 'Windows'}
+    if ($env:UserName -eq 'defaultuser0') { $WindowsPhase = 'OOBE' }
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_OOBE') { $WindowsPhase = 'Specialize' }
+    elseif ($ImageState -eq 'IMAGE_STATE_SPECIALIZE_RESEAL_TO_AUDIT') { $WindowsPhase = 'AuditMode' }
+    else { $WindowsPhase = 'Windows' }
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
@@ -29,7 +28,8 @@ $whoiam = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $isElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if ($isElevated) {
     Write-Host -ForegroundColor Green "[+] Running as $whoiam (Admin Elevated)"
-} else {
+}
+else {
     Write-Host -ForegroundColor Red "[!] Running as $whoiam (NOT Admin Elevated)"
     break
 }
@@ -43,27 +43,19 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud
+
+    # Start OSDCloud installation
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    # === OOBE.cmd Injection Logic ===
-    Write-Host -ForegroundColor Cyan "Injecting OOBE.cmd to re-run this script post-reboot..."
+    # Persist OOBE script for OOBE phase
+    $OOBEScriptPath = 'C:\ProgramData\OSDeploy\oobe_zti.ps1'
+    Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/dlynch34/test/main/OSD/oobe_zti.ps1' -OutFile $OOBEScriptPath
 
-    $TargetScriptPath = "C:\OSDCloud\Scripts\sandbox.ps1"
-    $TargetOOBECmd    = "C:\Windows\System32\OOBE.cmd"
-
-    # Ensure folders exist
-    New-Item -ItemType Directory -Path (Split-Path $TargetScriptPath) -Force | Out-Null
-    New-Item -ItemType Directory -Path (Split-Path $TargetOOBECmd) -Force | Out-Null
-
-    # Save this script to disk
-    $MyRawScript = Get-Content -LiteralPath $MyInvocation.MyCommand.Path -Raw
-    $MyRawScript | Out-File -FilePath $TargetScriptPath -Encoding ascii -Force
-
-    # Create OOBE.cmd to re-run it
-    $OOBECmdContent = "@echo off`nPowerShell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$TargetScriptPath`""
-    $OOBECmdContent | Out-File -FilePath $TargetOOBECmd -Encoding ascii -Force
-
-    Write-Host -ForegroundColor Green "OOBE.cmd created at $TargetOOBECmd"
+    # Create OOBE.cmd to run oobe_zti.ps1 on next boot
+    $OOBECmd = @'
+PowerShell -ExecutionPolicy Bypass -NoLogo -NoProfile -WindowStyle Hidden -File "C:\ProgramData\OSDeploy\oobe_zti.ps1"
+'@
+    $OOBECmd | Out-File -FilePath 'C:\Windows\System32\OOBE.cmd' -Encoding ascii -Force
 
     $null = Stop-Transcript -ErrorAction Ignore
 }
@@ -83,59 +75,7 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Green "Creating OSDeploy.OOBEDeploy.json with language and regional settings..."
-    $OOBEDeployJson = @'
-{
-    "AddNetFX3": { "IsPresent": true },
-    "Autopilot": { "IsPresent": false },
-    "SetLanguage": {
-        "GeoID": 244,
-        "InputLocale": "en-US",
-        "SystemLocale": "en-US",
-        "UILanguage": "en-US",
-        "UserLocale": "en-US",
-        "TimeZone": "Eastern Standard Time"
-    },
-    "RemoveAppx": [
-        "MicrosoftTeams",
-        "Microsoft.BingWeather",
-        "Microsoft.BingNews",
-        "Microsoft.GamingApp",
-        "Microsoft.GetHelp",
-        "Microsoft.Getstarted",
-        "Microsoft.Messaging",
-        "Microsoft.MicrosoftOfficeHub",
-        "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.MicrosoftStickyNotes",
-        "Microsoft.MSPaint",
-        "Microsoft.People",
-        "Microsoft.PowerAutomateDesktop",
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.Todos",
-        "microsoft.windowscommunicationsapps",
-        "Microsoft.WindowsFeedbackHub",
-        "Microsoft.WindowsMaps",
-        "Microsoft.WindowsSoundRecorder",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGameOverlay",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.XboxIdentityProvider",
-        "Microsoft.XboxSpeechToTextOverlay",
-        "Microsoft.YourPhone",
-        "Microsoft.ZuneMusic",
-        "Microsoft.ZuneVideo"
-    ],
-    "UpdateDrivers": { "IsPresent": true },
-    "UpdateWindows": { "IsPresent": true }
-}
-'@
-
-    if (!(Test-Path "C:\ProgramData\OSDeploy")) {
-        New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
-    }
-    $OOBEDeployJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json" -Encoding ascii -Force
-
-    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -InstallWinGet -WinGetUpgrade -WinGetPwsh
+    Write-Host -ForegroundColor Yellow "[OOBE Phase Detected] Waiting for oobe_zti.ps1 to run via OOBE.cmd..."
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
@@ -147,8 +87,11 @@ if ($WindowsPhase -eq 'Windows') {
 #endregion
 
 #=======================================================================
-#   Restart-Computer
+#   Final Reboot (WinPE only - usually overridden by ZTI reboot)
 #=======================================================================
-Write-Host  -ForegroundColor Green "Restarting in 20 seconds!"
-Start-Sleep -Seconds 20
-wpeutil reboot
+if ($WindowsPhase -eq 'WinPE') {
+    Write-Host -ForegroundColor Green "Rebooting in 20 seconds..."
+    Start-Sleep -Seconds 20
+    wpeutil reboot
+}
+
