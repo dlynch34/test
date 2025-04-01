@@ -2,7 +2,7 @@
 param()
 
 $ScriptName = 'sandbox.osdcloud.com'
-$ScriptVersion = '23.6.10.1'
+$ScriptVersion = '25.3.1.1'
 
 #region Initialize
 $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$ScriptName.log"
