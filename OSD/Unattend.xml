@@ -14,8 +14,7 @@
         <HideLocalAccountScreen>true</HideLocalAccountScreen>
         <ProtectYourPC>1</ProtectYourPC>
         <NetworkLocation>Work</NetworkLocation>
-        <SkipMachineOOBE>true</SkipMachineOOBE>
-        <SkipUserOOBE>true</SkipUserOOBE>
+        <!-- Removed SkipMachineOOBE and SkipUserOOBE to allow Autopilot -->
       </OOBE>
       <TimeZone>Eastern Standard Time</TimeZone>
     </component>
