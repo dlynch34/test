@@ -2,7 +2,7 @@
 param()
 
 $ScriptName = 'sandbox.osdcloud.com'
-$ScriptVersion = '23.6.10.1'
+$ScriptVersion = '25.1.1.1'
 
 #region Initialize
 $Transcript = "$((Get-Date).ToString('yyyy-MM-dd-HHmmss'))-$ScriptName.log"
@@ -44,7 +44,36 @@ if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    # Create SetupComplete.cmd for post-install OOBE execution
+    # ============================================
+    # Inject OSDeploy.OOBEDeploy.json before reboot
+    # ============================================
+    Write-Host -ForegroundColor Cyan "Injecting OSDeploy.OOBEDeploy.json for OOBEDeploy..."
+
+    $OOBEDeployUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+
+    # Find the Windows drive (typically C:)
+    $WindowsDrive = Get-WmiObject -Class Win32_LogicalDisk | Where-Object { $_.VolumeName -match "OS" -and $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
+    if (-not $WindowsDrive) { $WindowsDrive = "C:" }
+
+    $TargetPath = Join-Path $WindowsDrive "ProgramData\OSDeploy"
+    $TargetFile = Join-Path $TargetPath "OSDeploy.OOBEDeploy.json"
+
+    if (-not (Test-Path $TargetPath)) {
+        New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+    }
+
+    try {
+        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile $TargetFile -UseBasicParsing
+        if (Test-Path $TargetFile) {
+            Write-Host -ForegroundColor Green "✅ Successfully copied OOBEDeploy config to $TargetFile"
+        } else {
+            Write-Warning "❌ Failed to save OOBEDeploy config to $TargetFile"
+        }
+    } catch {
+        Write-Warning "⚠️ Error downloading OOBEDeploy config: $_"
+    }
+
+    # Create SetupComplete.cmd for post-install execution of this same script
     $setupScript = @'
 @echo off
 powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command \"iwr -useb https://raw.githubusercontent.com/dlynch34/test/main/OSD/oobe_zti.ps1 | iex\"' -WindowStyle Hidden"
@@ -70,59 +99,7 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Green "Creating OSDeploy.OOBEDeploy.json with language and regional settings..."
-    $OOBEDeployJson = @'
-{
-    "AddNetFX3": { "IsPresent": true },
-    "Autopilot": { "IsPresent": false },
-    "SetLanguage": {
-        "GeoID": 244,
-        "InputLocale": "en-US",
-        "SystemLocale": "en-US",
-        "UILanguage": "en-US",
-        "UserLocale": "en-US",
-        "TimeZone": "Eastern Standard Time"
-    },
-    "RemoveAppx": [
-        "MicrosoftTeams",
-        "Microsoft.BingWeather",
-        "Microsoft.BingNews",
-        "Microsoft.GamingApp",
-        "Microsoft.GetHelp",
-        "Microsoft.Getstarted",
-        "Microsoft.Messaging",
-        "Microsoft.MicrosoftOfficeHub",
-        "Microsoft.MicrosoftSolitaireCollection",
-        "Microsoft.MicrosoftStickyNotes",
-        "Microsoft.MSPaint",
-        "Microsoft.People",
-        "Microsoft.PowerAutomateDesktop",
-        "Microsoft.StorePurchaseApp",
-        "Microsoft.Todos",
-        "microsoft.windowscommunicationsapps",
-        "Microsoft.WindowsFeedbackHub",
-        "Microsoft.WindowsMaps",
-        "Microsoft.WindowsSoundRecorder",
-        "Microsoft.Xbox.TCUI",
-        "Microsoft.XboxGameOverlay",
-        "Microsoft.XboxGamingOverlay",
-        "Microsoft.XboxIdentityProvider",
-        "Microsoft.XboxSpeechToTextOverlay",
-        "Microsoft.YourPhone",
-        "Microsoft.ZuneMusic",
-        "Microsoft.ZuneVideo"
-    ],
-    "UpdateDrivers": { "IsPresent": true },
-    "UpdateWindows": { "IsPresent": true }
-}
-'@
-
-    if (!(Test-Path "C:\ProgramData\OSDeploy")) {
-        New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
-    }
-    $OOBEDeployJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json" -Encoding ascii -Force
-
-    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -InstallWinGet -WinGetUpgrade -WinGetPwsh
+    Write-Host -ForegroundColor Yellow "OOBE Phase started... nothing to inject — config already written in WinPE phase."
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
