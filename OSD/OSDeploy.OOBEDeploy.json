@@ -1,6 +1,6 @@
 {
   "AddNetFX3":  { "IsPresent": true },
-  "Autopilot":  { "IsPresent": false },
+  "Autopilot":  { "IsPresent": true },
   "RemoveAppx": [
     "MicrosoftTeams",
     "Microsoft.BingWeather",
