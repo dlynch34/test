@@ -54,7 +54,6 @@ if ($WindowsPhase -eq 'WinPE') {
     $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-"
 
     $ProgramDataPath = Join-Path $OSDrive "ProgramData\OSDeploy"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
