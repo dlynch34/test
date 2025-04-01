@@ -45,41 +45,44 @@ if ($WindowsPhase -eq 'WinPE') {
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
     # ============================================
-    # Inject OSDeploy.OOBEDeploy.json before reboot
+    # Inject OOBE Files from GitHub before reboot
     # ============================================
-    Write-Host -ForegroundColor Cyan "Injecting OSDeploy.OOBEDeploy.json for OOBEDeploy..."
+    Write-Host -ForegroundColor Cyan "Injecting Unattend.xml, OSDeploy.OOBEDeploy.json, and SetupComplete.cmd..."
 
-    $OOBEDeployUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+    $OSDrive = "C:"
 
-    # Find the Windows drive (typically C:)
-    $WindowsDrive = Get-WmiObject -Class Win32_LogicalDisk | Where-Object { $_.VolumeName -match "OS" -and $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
-    if (-not $WindowsDrive) { $WindowsDrive = "C:" }
+    $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+    $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
+    $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/SetupComplete.cmd"
 
-    $TargetPath = Join-Path $WindowsDrive "ProgramData\OSDeploy"
-    $TargetFile = Join-Path $TargetPath "OSDeploy.OOBEDeploy.json"
+    $ProgramDataPath = Join-Path $OSDrive "ProgramData\OSDeploy"
+    $PantherPath     = Join-Path $OSDrive "Windows\Panther"
+    $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
 
-    if (-not (Test-Path $TargetPath)) {
-        New-Item -ItemType Directory -Path $TargetPath -Force | Out-Null
+    New-Item -Path $ProgramDataPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $PantherPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
+
+    try {
+        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $ProgramDataPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OSDeploy.OOBEDeploy.json downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download OOBEDeploy JSON: $_"
     }
 
     try {
-        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile $TargetFile -UseBasicParsing
-        if (Test-Path $TargetFile) {
-            Write-Host -ForegroundColor Green "✅ Successfully copied OOBEDeploy config to $TargetFile"
-        } else {
-            Write-Warning "❌ Failed to save OOBEDeploy config to $TargetFile"
-        }
+        Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ Unattend.xml downloaded"
     } catch {
-        Write-Warning "⚠️ Error downloading OOBEDeploy config: $_"
+        Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
-    # Create SetupComplete.cmd for post-install execution of this same script
-    $setupScript = @'
-@echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command \"iwr -useb https://raw.githubusercontent.com/dlynch34/test/main/OSD/oobe_zti.ps1 | iex\"' -WindowStyle Hidden"
-'@
-    New-Item -ItemType Directory -Force -Path "C:\Windows\Setup\Scripts" | Out-Null
-    $setupScript | Set-Content -Path "C:\Windows\Setup\Scripts\SetupComplete.cmd" -Encoding Ascii
+    try {
+        Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ SetupComplete.cmd downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
+    }
 
     $null = Stop-Transcript -ErrorAction Ignore
 }
@@ -99,7 +102,7 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Yellow "OOBE Phase started... nothing to inject — config already written in WinPE phase."
+    Write-Host -ForegroundColor Yellow "OOBE Phase - no config written here, it was injected in WinPE"
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
@@ -111,6 +114,6 @@ if ($WindowsPhase -eq 'Windows') {
 #endregion
 
 # Final Reboot
-Write-Host -ForegroundColor Green "Restarting in 20 seconds!"
+Write-Host -ForegroundColor Green "Restarting in 20 seconds..."
 Start-Sleep -Seconds 20
 wpeutil reboot
