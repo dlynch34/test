@@ -25,7 +25,7 @@ Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.co
 
 #region Admin Elevation
 $whoiam = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$isElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole] "Administrator")
+$isElevated = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
 if ($isElevated) {
     Write-Host -ForegroundColor Green "[+] Running as $whoiam (Admin Elevated)"
 } else {
@@ -42,15 +42,15 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud
-
-    # Start OSDCloud installation
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    # Create OOBE.cmd to run GitHub-hosted oobe_zti.ps1 script
-    $OOBECmd = @'
-PowerShell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "iwr -useb https://raw.githubusercontent.com/dlynch34/test/main/OSD/oobe_zti.ps1 | iex"
+    # Create SetupComplete.cmd for post-install OOBE execution
+    $setupScript = @'
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command \"iwr -useb https://raw.githubusercontent.com/dlynch34/test/main/OSD/oobe_zti.ps1 | iex\"' -WindowStyle Hidden"
 '@
-    $OOBECmd | Out-File -FilePath 'C:\Windows\System32\OOBE.cmd' -Encoding ascii -Force
+    New-Item -ItemType Directory -Force -Path "C:\Windows\Setup\Scripts" | Out-Null
+    $setupScript | Set-Content -Path "C:\Windows\Setup\Scripts\SetupComplete.cmd" -Encoding Ascii
 
     $null = Stop-Transcript -ErrorAction Ignore
 }
@@ -70,7 +70,59 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Green "[+] OOBE phase reached, nothing further handled in sandbox script."
+    Write-Host -ForegroundColor Green "Creating OSDeploy.OOBEDeploy.json with language and regional settings..."
+    $OOBEDeployJson = @'
+{
+    "AddNetFX3": { "IsPresent": true },
+    "Autopilot": { "IsPresent": false },
+    "SetLanguage": {
+        "GeoID": 244,
+        "InputLocale": "en-US",
+        "SystemLocale": "en-US",
+        "UILanguage": "en-US",
+        "UserLocale": "en-US",
+        "TimeZone": "Eastern Standard Time"
+    },
+    "RemoveAppx": [
+        "MicrosoftTeams",
+        "Microsoft.BingWeather",
+        "Microsoft.BingNews",
+        "Microsoft.GamingApp",
+        "Microsoft.GetHelp",
+        "Microsoft.Getstarted",
+        "Microsoft.Messaging",
+        "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.MicrosoftSolitaireCollection",
+        "Microsoft.MicrosoftStickyNotes",
+        "Microsoft.MSPaint",
+        "Microsoft.People",
+        "Microsoft.PowerAutomateDesktop",
+        "Microsoft.StorePurchaseApp",
+        "Microsoft.Todos",
+        "microsoft.windowscommunicationsapps",
+        "Microsoft.WindowsFeedbackHub",
+        "Microsoft.WindowsMaps",
+        "Microsoft.WindowsSoundRecorder",
+        "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxGameOverlay",
+        "Microsoft.XboxGamingOverlay",
+        "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay",
+        "Microsoft.YourPhone",
+        "Microsoft.ZuneMusic",
+        "Microsoft.ZuneVideo"
+    ],
+    "UpdateDrivers": { "IsPresent": true },
+    "UpdateWindows": { "IsPresent": true }
+}
+'@
+
+    if (!(Test-Path "C:\ProgramData\OSDeploy")) {
+        New-Item "C:\ProgramData\OSDeploy" -ItemType Directory -Force | Out-Null
+    }
+    $OOBEDeployJson | Out-File -FilePath "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json" -Encoding ascii -Force
+
+    osdcloud-StartOOBE -Display -Language -DateTime -Autopilot -InstallWinGet -WinGetUpgrade -WinGetPwsh
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
@@ -81,11 +133,7 @@ if ($WindowsPhase -eq 'Windows') {
 }
 #endregion
 
-#=======================================================================
-#   Optional: Restart WinPE
-#=======================================================================
-if ($WindowsPhase -eq 'WinPE') {
-    Write-Host -ForegroundColor Green "Restarting in 20 seconds..."
-    Start-Sleep -Seconds 20
-    wpeutil reboot
-}
+# Final Reboot
+Write-Host -ForegroundColor Green "Restarting in 20 seconds!"
+Start-Sleep -Seconds 20
+wpeutil reboot
