@@ -20,7 +20,7 @@ else {
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
-Import-Module OSD -Force
+Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
 #endregion
 
 #region Admin Elevation
@@ -42,9 +42,7 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
     osdcloud-StartWinPE -OSDCloud
-
-    # Immediately start imaging with no delay
-    Invoke-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
+    Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
     # ============================================
     # Inject OOBE Files from GitHub before reboot
