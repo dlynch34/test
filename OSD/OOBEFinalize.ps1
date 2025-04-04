@@ -13,41 +13,6 @@ Function Write-Log {
 }
 Write-Log "Starting OOBE Finalize Script"
 
-# Set Computer Name Logic: LPG (Laptop) / DSG (Desktop) + Serial
-Write-Host "Determining device type for naming..." -ForegroundColor Cyan
-if (Get-CimInstance Win32_Battery) {
-    $Prefix = "LPG"
-    Write-Host "Device identified as LAPTOP. Prefix set to 'LPG'."
-    Write-Log "Device identified as LAPTOP. Prefix = LPG"
-} else {
-    $Prefix = "DSG"
-    Write-Host "Device identified as DESKTOP. Prefix set to 'DSG'."
-    Write-Log "Device identified as DESKTOP. Prefix = DSG"
-}
-
-$Serial = (Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim()
-$MaxLen = 15 - $Prefix.Length
-if ($Serial.Length -gt $MaxLen) {
-    $Serial = $Serial.Substring(0, $MaxLen)
-}
-$NewComputerName = "$Prefix$Serial"
-
-$currentName = (Get-CimInstance Win32_ComputerSystem).Name
-if ($currentName -ne $NewComputerName) {
-    Rename-Computer -NewName $NewComputerName -Force
-    Write-Log "Renamed computer to $NewComputerName"
-} else {
-    Write-Log "Computer already named $NewComputerName"
-}
-
-# Registry Key for Intune Detection
-$RegistryPath = "HKLM:\SOFTWARE\Serco\ComputerRename"
-if (-not (Test-Path $RegistryPath)) {
-    New-Item -Path $RegistryPath -Force | Out-Null
-}
-Set-ItemProperty -Path $RegistryPath -Name "Renamed" -Value "True"
-Set-ItemProperty -Path $RegistryPath -Name "NewName" -Value $NewComputerName
-Write-Log "Registry key set for rename detection"
 
 # Enable FIPS policy
 $FipsRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy"
