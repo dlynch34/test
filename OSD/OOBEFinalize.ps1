@@ -2,40 +2,75 @@
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
-# Install the OSD module (provides Start-OOBEDeploy)
 Install-Module -Name OSD -Force -Verbose
 
-Write-Host "Running OOBE deployment tasks..." -ForegroundColor Cyan
+# Create log file
+$LogFile = "C:\ProgramData\RenameComputer.log"
+Function Write-Log {
+    param ([string]$Message)
+    $TimeStamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Add-Content -Path $LogFile -Value "$TimeStamp - $Message"
+}
+Write-Log "Starting OOBE Finalize Script"
 
-# =====================================
-# Add custom rename logic: DSG/LPG+Serial
-# =====================================
-$Battery = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue
-$Prefix = if ($Battery) { "LPG" } else { "DSG" }
-$Serial = (Get-CimInstance Win32_BIOS).SerialNumber.Trim()
-$MaxLen = 15 - $Prefix.Length
-$Serial = if ($Serial.Length -gt $MaxLen) { $Serial.Substring(0, $MaxLen) } else { $Serial }
-$NewName = "$Prefix$Serial"
-
-$currentName = (Get-CimInstance Win32_ComputerSystem).Name
-if ($currentName -ne $NewName) {
-    Rename-Computer -NewName $NewName -Force
-    Write-Host "Computer renamed to $NewName" -ForegroundColor Green
-
-    $RegPath = "HKLM:\SOFTWARE\Serco\ComputerRename"
-    if (-not (Test-Path $RegPath)) {
-        New-Item -Path $RegPath -Force | Out-Null
-    }
-    Set-ItemProperty -Path $RegPath -Name "Renamed" -Value "True"
-    Set-ItemProperty -Path $RegPath -Name "NewName" -Value $NewName
-    Write-Host "Registry updated with rename info." -ForegroundColor Green
+# Set Computer Name Logic: LPG (Laptop) / DSG (Desktop) + Serial
+Write-Host "Determining device type for naming..." -ForegroundColor Cyan
+if (Get-CimInstance Win32_Battery) {
+    $Prefix = "LPG"
+    Write-Host "Device identified as LAPTOP. Prefix set to 'LPG'."
+    Write-Log "Device identified as LAPTOP. Prefix = LPG"
 } else {
-    Write-Host "Computer already named correctly as $NewName" -ForegroundColor Yellow
+    $Prefix = "DSG"
+    Write-Host "Device identified as DESKTOP. Prefix set to 'DSG'."
+    Write-Log "Device identified as DESKTOP. Prefix = DSG"
 }
 
-# Run OOBEDeploy (reads JSON config from C:\ProgramData\OSDeploy)
+$Serial = (Get-WmiObject -Class Win32_BIOS).SerialNumber.Trim()
+$MaxLen = 15 - $Prefix.Length
+if ($Serial.Length -gt $MaxLen) {
+    $Serial = $Serial.Substring(0, $MaxLen)
+}
+$NewComputerName = "$Prefix$Serial"
+
+$currentName = (Get-CimInstance Win32_ComputerSystem).Name
+if ($currentName -ne $NewComputerName) {
+    Rename-Computer -NewName $NewComputerName -Force
+    Write-Log "Renamed computer to $NewComputerName"
+} else {
+    Write-Log "Computer already named $NewComputerName"
+}
+
+# Registry Key for Intune Detection
+$RegistryPath = "HKLM:\SOFTWARE\Serco\ComputerRename"
+if (-not (Test-Path $RegistryPath)) {
+    New-Item -Path $RegistryPath -Force | Out-Null
+}
+Set-ItemProperty -Path $RegistryPath -Name "Renamed" -Value "True"
+Set-ItemProperty -Path $RegistryPath -Name "NewName" -Value $NewComputerName
+Write-Log "Registry key set for rename detection"
+
+# Enable FIPS policy
+$FipsRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy"
+if (-not (Test-Path $FipsRegistryPath)) {
+    New-Item -Path $FipsRegistryPath -Force | Out-Null
+}
+Set-ItemProperty -Path $FipsRegistryPath -Name "Enabled" -Value 1
+Write-Log "FIPS Algorithm Policy enabled"
+
+# Set Data Execution Prevention to OptOut
+try {
+    Start-Process -FilePath "bcdedit.exe" -ArgumentList "/set nx optout" -NoNewWindow -Wait
+    Write-Log "Successfully executed: bcdedit /set nx optout"
+} catch {
+    Write-Log "Failed to execute bcdedit: $($_.Exception.Message)"
+}
+
+# Run OOBEDeploy
+Write-Host "Running OOBEDeploy tasks..." -ForegroundColor Cyan
 Start-OOBEDeploy
+Write-Log "Start-OOBEDeploy executed"
 
-Write-Host "OOBE tasks completed. Restarting device..." -ForegroundColor Cyan
+# Reboot
+Write-Host "OOBE Finalization complete. Restarting..." -ForegroundColor Cyan
+Write-Log "Rebooting device"
 Restart-Computer -Force
-
