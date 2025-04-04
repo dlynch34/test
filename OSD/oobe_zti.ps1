@@ -44,7 +44,7 @@ if ($WindowsPhase -eq 'WinPE') {
     #osdcloud-StartWinPE -OSDCloud
 
     # Immediately start imaging with no delay
-   Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
+   Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Pro -Verbose
 
     # ============================================
     # Inject OOBE Files from GitHub before reboot
