@@ -20,7 +20,7 @@ else {
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
-Import-Module OSD -Force
+Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
 #endregion
 
 #region Admin Elevation
@@ -41,10 +41,8 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
-    #osdcloud-StartWinPE -OSDCloud
-
-    # Immediately start imaging with no delay
-   Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Pro -Verbose
+    osdcloud-StartWinPE -OSDCloud
+    Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
     # ============================================
     # Inject OOBE Files from GitHub before reboot
@@ -52,7 +50,16 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "Injecting Unattend.xml, OSDeploy.OOBEDeploy.json, and SetupComplete.cmd..."
 
     $OSDrive = "C:"
+$RenameScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RenameDevice.ps1"
+$ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
+New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
 
+try {
+    Invoke-WebRequest -Uri $RenameScriptUrl -OutFile (Join-Path $ScriptsPath "RenameDevice.ps1") -UseBasicParsing
+    Write-Host -ForegroundColor Green "✅ RenameDevice.ps1 downloaded"
+} catch {
+    Write-Warning "⚠️ Failed to download RenameDevice.ps1: $_"
+}
     $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
