@@ -54,12 +54,6 @@ $RenameScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Ren
 $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
 New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
 
-try {
-    Invoke-WebRequest -Uri $RenameScriptUrl -OutFile (Join-Path $ScriptsPath "RenameDevice.ps1") -UseBasicParsing
-    Write-Host -ForegroundColor Green "✅ RenameDevice.ps1 downloaded"
-} catch {
-    Write-Warning "⚠️ Failed to download RenameDevice.ps1: $_"
-}
     $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
