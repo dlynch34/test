@@ -20,7 +20,7 @@ else {
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
-Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
+#Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
 #endregion
 
 #region Admin Elevation
