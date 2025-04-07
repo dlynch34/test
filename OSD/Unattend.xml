@@ -1,22 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
+  <!-- 
+       The main place we configure OOBE behavior is in the "oobeSystem" pass.
+       "Microsoft-Windows-International-Core" sets locale and language for OOBE. 
+       "Microsoft-Windows-Shell-Setup" configures OOBE screens, skip prompts, etc.
+  -->
   <settings pass="oobeSystem">
-    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+    
+    <!-- 1. International Settings to pre-select region/keyboard -->
+    <component name="Microsoft-Windows-International-Core" 
+               processorArchitecture="amd64" 
+               publicKeyToken="31bf3856ad364e35" 
+               language="neutral" 
+               versionScope="nonSxS" 
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <!-- Adjust the language/region if not en-US -->
       <InputLocale>en-US</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
     </component>
-    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+    <!-- 2. Shell-Setup for OOBE customizations -->
+    <component name="Microsoft-Windows-Shell-Setup" 
+               processorArchitecture="amd64" 
+               publicKeyToken="31bf3856ad364e35" 
+               language="neutral" 
+               versionScope="nonSxS" 
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <OOBE>
+        <!-- Skip PC naming screen -->
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        
+        <!-- Keep user OOBE so user/tech can sign in with DEM -->
+        <SkipUserOOBE>false</SkipUserOOBE>
+
+        <!-- Hide local account creation (no "personal" option) -->
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+
+        <!-- Hide EULA and wireless setup screens -->
         <HideEULAPage>true</HideEULAPage>
         <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
-        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+
+        <!-- 
+          ProtectYourPC: 
+            1 = Enabling updates automatically (typical setting).
+            3 = Disables or customizes certain "protect" prompts. 
+        -->
         <ProtectYourPC>1</ProtectYourPC>
+
+        <!-- Force the network location to 'Work' (business) -->
         <NetworkLocation>Work</NetworkLocation>
-        <!-- Removed SkipMachineOOBE and SkipUserOOBE to allow Autopilot -->
       </OOBE>
+
+      <!-- 3. Set time zone (change if you need a different zone) -->
       <TimeZone>Eastern Standard Time</TimeZone>
     </component>
   </settings>
 </unattend>
+
