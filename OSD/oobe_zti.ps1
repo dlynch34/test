@@ -41,7 +41,7 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
-    osdcloud-StartWinPE -OSDCloud
+    #osdcloud-StartWinPE -OSDCloud
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Pro -OSLicense Retail -Verbose
 
     # ============================================
