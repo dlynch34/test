@@ -1,10 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
-  <!-- 
-       The main place we configure OOBE behavior is in the "oobeSystem" pass.
-       "Microsoft-Windows-International-Core" sets locale and language for OOBE. 
-       "Microsoft-Windows-Shell-Setup" configures OOBE screens, skip prompts, etc.
-  -->
   <settings pass="oobeSystem">
     
     <!-- 1. International Settings to pre-select region/keyboard -->
@@ -14,7 +9,6 @@
                language="neutral" 
                versionScope="nonSxS" 
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-      <!-- Adjust the language/region if not en-US -->
       <InputLocale>en-US</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
@@ -32,30 +26,27 @@
         <!-- Skip PC naming screen -->
         <SkipMachineOOBE>true</SkipMachineOOBE>
         
-        <!-- Keep user OOBE so user/tech can sign in with DEM -->
+        <!-- Keep User OOBE so user can sign in with DEM or AAD -->
         <SkipUserOOBE>false</SkipUserOOBE>
 
-        <!-- Hide local account creation (no "personal" option) -->
+        <!-- Hide Local Account screen (no “personal” option) -->
         <HideLocalAccountScreen>true</HideLocalAccountScreen>
 
-        <!-- Hide EULA and wireless setup screens -->
-        <HideEULAPage>true</HideEULAPage>
-        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <!-- Show Wi-Fi setup (allow user to pick wireless network) -->
+        <HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE>
 
-        <!-- 
-          ProtectYourPC: 
-            1 = Enabling updates automatically (typical setting).
-            3 = Disables or customizes certain "protect" prompts. 
-        -->
+        <!-- Hide EULA page -->
+        <HideEULAPage>true</HideEULAPage>
+
+        <!-- Set ProtectYourPC to 1 (enable basic security prompts) -->
         <ProtectYourPC>1</ProtectYourPC>
 
-        <!-- Force the network location to 'Work' (business) -->
+        <!-- Force network location to Work -->
         <NetworkLocation>Work</NetworkLocation>
       </OOBE>
 
-      <!-- 3. Set time zone (change if you need a different zone) -->
+      <!-- 3. Set Time Zone (change if you need a different zone) -->
       <TimeZone>Eastern Standard Time</TimeZone>
     </component>
   </settings>
 </unattend>
-
