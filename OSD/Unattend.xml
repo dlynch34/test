@@ -1,52 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
   <settings pass="oobeSystem">
-    
-    <!-- 1. International Settings to pre-select region/keyboard -->
-    <component name="Microsoft-Windows-International-Core" 
-               processorArchitecture="amd64" 
-               publicKeyToken="31bf3856ad364e35" 
-               language="neutral" 
-               versionScope="nonSxS" 
-               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+    <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <InputLocale>en-US</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
     </component>
-
-    <!-- 2. Shell-Setup for OOBE customizations -->
-    <component name="Microsoft-Windows-Shell-Setup" 
-               processorArchitecture="amd64" 
-               publicKeyToken="31bf3856ad364e35" 
-               language="neutral" 
-               versionScope="nonSxS" 
-               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <OOBE>
-        <!-- Skip PC naming screen -->
-        <SkipMachineOOBE>false</SkipMachineOOBE>
-        
-        <!-- Keep User OOBE so user can sign in with DEM or AAD -->
-        <SkipUserOOBE>false</SkipUserOOBE>
-
-        <!-- Hide Local Account screen (no “personal” option) -->
-        <HideLocalAccountScreen>true</HideLocalAccountScreen>
-
-        <!-- Show Wi-Fi setup (allow user to pick wireless network) -->
-        <HideWirelessSetupInOOBE>false</HideWirelessSetupInOOBE>
-
-        <!-- Hide EULA page -->
         <HideEULAPage>true</HideEULAPage>
-
-        <!-- Set ProtectYourPC to 1 (enable basic security prompts) -->
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <HideLocalAccountScreen>true</HideLocalAccountScreen>
         <ProtectYourPC>1</ProtectYourPC>
-
-        <!-- Force network location to Work -->
         <NetworkLocation>Work</NetworkLocation>
       </OOBE>
-
-      <!-- 3. Set Time Zone (change if you need a different zone) -->
       <TimeZone>Eastern Standard Time</TimeZone>
     </component>
   </settings>
 </unattend>
+
