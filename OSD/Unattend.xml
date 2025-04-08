@@ -24,7 +24,7 @@
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
       <OOBE>
         <!-- Skip PC naming screen -->
-        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipMachineOOBE>false</SkipMachineOOBE>
         
         <!-- Keep User OOBE so user can sign in with DEM or AAD -->
         <SkipUserOOBE>false</SkipUserOOBE>
