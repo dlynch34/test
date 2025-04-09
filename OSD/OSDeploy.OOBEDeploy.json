@@ -45,6 +45,6 @@
     "Microsoft.OutlookForWindows",
     "Microsoft.Microsoft365"
   ],
-  "UpdateDrivers": { "IsPresent": true },
+  "UpdateDrivers": { "IsPresent": false },
   "UpdateWindows": { "IsPresent": true }
 }
