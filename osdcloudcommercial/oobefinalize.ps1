@@ -13,7 +13,7 @@ if (-not (Get-Command Get-WindowsAutopilotInfo.ps1 -ErrorAction SilentlyContinue
 # Automatically register this device with Autopilot (Commercial only)
 try {
     Write-Host "Registering device with Autopilot (Commercial tenant)..." -ForegroundColor Green
-    Get-WindowsAutopilotInfo.ps1 -Online -GroupTag "Serco-OOBE" -Assign
+    Get-WindowsAutopilotInfo.ps1 -Online -Assign
     Write-Log "Device registered to Autopilot with GroupTag Serco-OOBE"
 } catch {
     Write-Log "Autopilot registration failed: $($_.Exception.Message)"
