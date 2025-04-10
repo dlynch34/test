@@ -9,7 +9,7 @@ function Write-Log {
 }
 Write-Log "===== Starting OOBE Finalization ====="
 
-# Install and import OSD
+# Install and import OSD module
 try {
     if (-not (Get-Module -ListAvailable -Name OSD)) {
         Install-Module -Name OSD -Force -Verbose
@@ -20,44 +20,6 @@ try {
 } catch {
     Write-Log "❌ Failed to install/import OSD module: $($_.Exception.Message)"
 }
-
-# --- Embedded OOBEDeploy Functions ---
-function Invoke-OOBEAddNetFX3 {
-    try {
-        Write-Log "📦 Enabling .NET Framework 3.5 (Add-WindowsCapability)..."
-        Add-WindowsCapability -Online -Name "NetFx3~~~~" -ErrorAction Stop | Out-Null
-        Write-Log "✅ .NET Framework 3.5 enabled"
-    } catch {
-        Write-Log "❌ Failed to enable .NET 3.5: $($_.Exception.Message)"
-    }
-}
-
-function Invoke-OOBERemoveAppx {
-    $jsonPath = "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json"
-    if (Test-Path $jsonPath) {
-        try {
-            $config = Get-Content $jsonPath -Raw | ConvertFrom-Json
-            $apps = $config.RemoveAppx
-            foreach ($app in $apps) {
-                Write-Log "📦 Removing AppxPackage: $app"
-                Get-AppxPackage -AllUsers -Name $app | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
-                Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
-                Write-Log "✅ Removed $app"
-            }
-        } catch {
-            Write-Log "❌ Error during RemoveAppx: $($_.Exception.Message)"
-        }
-    } else {
-        Write-Log "❌ OSDeploy.OOBEDeploy.json not found for Appx cleanup"
-    }
-}
-
-function Start-OOBEDeploy {
-    Write-Log "▶️ Starting OOBEDeploy tasks..."
-    Invoke-OOBEAddNetFX3
-    Invoke-OOBERemoveAppx
-}
-# --- End Embedded OOBEDeploy ---
 
 # Enable FIPS policy
 try {
@@ -110,8 +72,7 @@ try {
     Write-Log "❌ Exception occurred during KMS cleanup: $($_.Exception.Message)"
 }
 
-# Run OOBEDeploy
-Write-Host "Running OOBEDeploy tasks..." -ForegroundColor Cyan
+# Run OOBEDeploy (optional)
 try {
     Start-OOBEDeploy
     Write-Log "✅ Start-OOBEDeploy executed successfully"
@@ -119,4 +80,21 @@ try {
     Write-Log "❌ Failed to run Start-OOBEDeploy: $($_.Exception.Message)"
 }
 
-Write-Log "===== OOBE Finalization Complete ====="
+# Call MAK activation script directly
+$makScript = "C:\OSDCloud\Config\Scripts\startup\Set-WindowsActivation.ps1"
+if (Test-Path $makScript) {
+    Write-Log "▶️ Running MAK activation script..."
+    try {
+        & $makScript
+        Write-Log "✅ MAK activation script executed"
+    } catch {
+        Write-Log "❌ MAK activation script failed: $($_.Exception.Message)"
+    }
+} else {
+    Write-Log "⚠️ MAK activation script not found at: $makScript"
+}
+
+# Reboot to finalize activation and policy
+Write-Log "🔁 Rebooting to complete MAK activation..."
+Start-Sleep -Seconds 10
+Restart-Computer -Force
