@@ -30,15 +30,32 @@ try {
     Write-Log "Failed to execute bcdedit: $($_.Exception.Message)"
 }
 
-# Remove any existing KMS activation (allow Intune to apply MAK)
+# Ensure Software Protection Service is running
 try {
-    Write-Log "Removing KMS activation keys..."
-    cscript.exe //nologo $env:SystemRoot\System32\slmgr.vbs /upk | Out-Null
-    cscript.exe //nologo $env:SystemRoot\System32\slmgr.vbs /cpky | Out-Null
-    cscript.exe //nologo $env:SystemRoot\System32\slmgr.vbs /ckms | Out-Null
-    Write-Log "✅ KMS key removed"
+    $service = Get-Service -Name sppsvc -ErrorAction Stop
+    if ($service.Status -ne 'Running') {
+        Write-Log "Starting sppsvc (Software Protection Service)..."
+        Start-Service -Name sppsvc
+        Start-Sleep -Seconds 5
+        Write-Log "✅ sppsvc started"
+    } else {
+        Write-Log "sppsvc is already running"
+    }
 } catch {
-    Write-Log "❌ Failed to remove KMS key: $($_.Exception.Message)"
+    Write-Log "❌ Failed to check or start sppsvc: $($_.Exception.Message)"
+}
+
+# Remove any existing KMS activation key (upk + cpky only)
+Write-Log "Removing KMS client activation keys..."
+$exit1 = (Start-Process -FilePath "cscript.exe" -ArgumentList "//nologo $env:SystemRoot\System32\slmgr.vbs /upk" -NoNewWindow -Wait -PassThru).ExitCode
+$exit2 = (Start-Process -FilePath "cscript.exe" -ArgumentList "//nologo $env:SystemRoot\System32\slmgr.vbs /cpky" -NoNewWindow -Wait -PassThru).ExitCode
+
+if ($exit1 -eq 0 -and $exit2 -eq 0) {
+    Write-Log "✅ KMS keys removed successfully (/upk, /cpky)"
+} else {
+    Write-Log "⚠️ One or more KMS removal steps may have failed:"
+    Write-Log "  /upk exit code: $exit1"
+    Write-Log "  /cpky exit code: $exit2"
 }
 
 # Run OOBEDeploy
@@ -51,6 +68,3 @@ try {
 }
 
 Write-Log "===== OOBE Finalization Complete ====="
-
-
-
