@@ -43,6 +43,11 @@
     "Microsoft.ZuneMusic",
     "Microsoft.ZuneVideo",
     "Microsoft.OutlookForWindows",
+    "5319275A.WhatsAppDesktop",
+  "Facebook.InstagramBeta",
+  "Facebook.Facebook",
+  "TikTok.TikTok",
+  "AmazonVideo.PrimeVideo",
     "Microsoft.Microsoft365"
   ],
   "UpdateDrivers": { "IsPresent": false },
