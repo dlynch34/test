@@ -4,6 +4,20 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
 Install-Module -Name OSD -Force -Verbose
 
+# Install Autopilot Info script if needed
+if (-not (Get-Command Get-WindowsAutopilotInfo.ps1 -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Get-WindowsAutopilotInfo script..." -ForegroundColor Cyan
+    Install-Script -Name Get-WindowsAutopilotInfo -Force
+}
+
+# Automatically register this device with Autopilot (Commercial only)
+try {
+    Write-Host "Registering device with Autopilot (Commercial tenant)..." -ForegroundColor Green
+    Get-WindowsAutopilotInfo.ps1 -Online -GroupTag "Serco-OOBE" -Assign
+    Write-Log "Device registered to Autopilot with GroupTag Serco-OOBE"
+} catch {
+    Write-Log "Autopilot registration failed: $($_.Exception.Message)"
+}
 
 # Enable FIPS policy
 $FipsRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy"
@@ -25,3 +39,4 @@ try {
 Write-Host "Running OOBEDeploy tasks..." -ForegroundColor Cyan
 Start-OOBEDeploy
 Write-Log "Start-OOBEDeploy executed"
+
