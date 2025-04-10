@@ -3,42 +3,61 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 # Setup log path
 $logPath = "C:\ProgramData\OOBEFinalize.log"
-
 function Write-Log {
     param([string]$msg)
     Add-Content -Path $logPath -Value "$(Get-Date -f 'yyyy-MM-dd HH:mm:ss') - $msg"
 }
-
 Write-Log "===== Starting OOBE Finalization ====="
 
-Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
+# Install and import OSD
 try {
     if (-not (Get-Module -ListAvailable -Name OSD)) {
         Install-Module -Name OSD -Force -Verbose
         Write-Log "✅ OSD module installed"
-    } else {
-        Write-Log "OSD module already available"
     }
-
     Import-Module OSD -Force -Verbose
     Write-Log "✅ OSD module imported successfully"
 } catch {
     Write-Log "❌ Failed to install/import OSD module: $($_.Exception.Message)"
 }
 
-# Dot-source helper functions from Start-OOBEDeploy.ps1 to expose Invoke-OOBE* functions
-try {
-    $osdPath = (Get-Module -Name OSD).ModuleBase
-    $deployScript = Join-Path $osdPath "Public\Functions\Start-OOBEDeploy.ps1"
-    if (Test-Path $deployScript) {
-        . $deployScript
-        Write-Log "✅ Dot-sourced Start-OOBEDeploy.ps1 to expose internal functions"
-    } else {
-        Write-Log "❌ Could not find Start-OOBEDeploy.ps1 at $deployScript"
+# --- Embedded OOBEDeploy Functions ---
+function Invoke-OOBEAddNetFX3 {
+    try {
+        Write-Log "📦 Enabling .NET Framework 3.5 (Add-WindowsCapability)..."
+        Add-WindowsCapability -Online -Name "NetFx3~~~~" -ErrorAction Stop | Out-Null
+        Write-Log "✅ .NET Framework 3.5 enabled"
+    } catch {
+        Write-Log "❌ Failed to enable .NET 3.5: $($_.Exception.Message)"
     }
-} catch {
-    Write-Log "❌ Failed to dot-source Start-OOBEDeploy.ps1: $($_.Exception.Message)"
 }
+
+function Invoke-OOBERemoveAppx {
+    $jsonPath = "C:\ProgramData\OSDeploy\OSDeploy.OOBEDeploy.json"
+    if (Test-Path $jsonPath) {
+        try {
+            $config = Get-Content $jsonPath -Raw | ConvertFrom-Json
+            $apps = $config.RemoveAppx
+            foreach ($app in $apps) {
+                Write-Log "📦 Removing AppxPackage: $app"
+                Get-AppxPackage -AllUsers -Name $app | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+                Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $app | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+                Write-Log "✅ Removed $app"
+            }
+        } catch {
+            Write-Log "❌ Error during RemoveAppx: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Log "❌ OSDeploy.OOBEDeploy.json not found for Appx cleanup"
+    }
+}
+
+function Start-OOBEDeploy {
+    Write-Log "▶️ Starting OOBEDeploy tasks..."
+    Invoke-OOBEAddNetFX3
+    Invoke-OOBERemoveAppx
+}
+# --- End Embedded OOBEDeploy ---
 
 # Enable FIPS policy
 try {
