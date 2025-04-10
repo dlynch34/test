@@ -1,31 +1,47 @@
 # Allow script to run without interactive confirmation
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
-Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
-Install-Module -Name OSD -Force -Verbose
+# Create working directory
+$autopilotPath = "C:\ProgramData\Autopilot"
+New-Item -ItemType Directory -Path $autopilotPath -Force | Out-Null
+$hashPath = Join-Path $autopilotPath "DeviceHash.csv"
+$uploadScriptPath = Join-Path $autopilotPath "Upload-AutopilotHash.ps1"
 
-# Define the directory and file path for storing the hardware hash
-$hashDir = "C:\ProgramData\Autopilot"
-$hashPath = Join-Path -Path $hashDir -ChildPath "DeviceHash.csv"
-
-# Create the directory if it doesn't exist
-if (-not (Test-Path -Path $hashDir)) {
-    New-Item -ItemType Directory -Path $hashDir -Force | Out-Null
-}
-
-# Install Get-WindowsAutopilotInfo if needed
+# Install Get-WindowsAutopilotInfo script if needed
 if (-not (Get-Command Get-WindowsAutopilotInfo.ps1 -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing Get-WindowsAutopilotInfo script..." -ForegroundColor Cyan
     Install-Script -Name Get-WindowsAutopilotInfo -Force -Scope AllUsers
 }
 
-# Generate and save the hardware hash
+# Generate the hash and save it locally
 try {
-    Write-Host "Generating hardware hash and saving to $hashPath"
+    Write-Host "Generating Autopilot hardware hash..."
     Get-WindowsAutopilotInfo.ps1 -OutputFile $hashPath
-    Write-Host "✅ Hardware hash saved"
+    Write-Host "✅ Hardware hash saved to $hashPath"
 } catch {
     Write-Host "❌ Failed to generate hardware hash: $($_.Exception.Message)"
+}
+
+# Download the Upload-AutopilotHash.ps1 script from GitHub (or another blob)
+$uploadScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/osdcloudcommercial/Upload-AutopilotHash.ps1"
+try {
+    Invoke-WebRequest -Uri $uploadScriptUrl -OutFile $uploadScriptPath -UseBasicParsing
+    Write-Host "✅ Upload script saved to $uploadScriptPath"
+} catch {
+    Write-Host "❌ Failed to download upload script: $($_.Exception.Message)"
+}
+
+# Create the scheduled task to upload hash at first user logon
+try {
+    $taskName = "UploadAutopilotHash"
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$uploadScriptPath`""
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    $principal = New-ScheduledTaskPrincipal -UserId "BUILTIN\Users" -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+    Write-Host "✅ Scheduled task '$taskName' created"
+} catch {
+    Write-Host "❌ Failed to create scheduled task: $($_.Exception.Message)"
 }
 
 # Enable FIPS policy
@@ -45,4 +61,3 @@ try {
 # Run OOBEDeploy
 Write-Host "Running OOBEDeploy tasks..." -ForegroundColor Cyan
 Start-OOBEDeploy
-
