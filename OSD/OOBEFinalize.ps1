@@ -14,6 +14,10 @@ Write-Log "===== Starting OOBE Finalization ====="
 Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
 Install-Module -Name OSD -Force -Verbose
 
+Import-Module OSD -Force
+Write-Log "OSD module imported successfully"
+
+
 # Enable FIPS policy
 $FipsRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\FipsAlgorithmPolicy"
 if (-not (Test-Path $FipsRegistryPath)) {
