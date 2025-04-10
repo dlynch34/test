@@ -50,7 +50,7 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "Injecting Unattend.xml, OSDeploy.OOBEDeploy.json, and SetupComplete.cmd..."
 
     $OSDrive = "C:"
-$RenameScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RenameDevice.ps1"
+#$RenameScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RenameDevice.ps1"
 $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
 New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
 
