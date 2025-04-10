@@ -1,22 +1,31 @@
-# Allow script to run without interactive confirmation 
+# Allow script to run without interactive confirmation
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 Write-Host "Installing required PowerShell modules for OOBE tasks..." -ForegroundColor Cyan
 Install-Module -Name OSD -Force -Verbose
 
-# Install Autopilot Info script if needed
-if (-not (Get-Command Get-WindowsAutopilotInfo.ps1 -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing Get-WindowsAutopilotInfo script..." -ForegroundColor Cyan
-    Install-Script -Name Get-WindowsAutopilotInfo -Force
+# Define the directory and file path for storing the hardware hash
+$hashDir = "C:\ProgramData\Autopilot"
+$hashPath = Join-Path -Path $hashDir -ChildPath "DeviceHash.csv"
+
+# Create the directory if it doesn't exist
+if (-not (Test-Path -Path $hashDir)) {
+    New-Item -ItemType Directory -Path $hashDir -Force | Out-Null
 }
 
-# Automatically register this device with Autopilot (Commercial only)
+# Install Get-WindowsAutopilotInfo if needed
+if (-not (Get-Command Get-WindowsAutopilotInfo.ps1 -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing Get-WindowsAutopilotInfo script..." -ForegroundColor Cyan
+    Install-Script -Name Get-WindowsAutopilotInfo -Force -Scope AllUsers
+}
+
+# Generate and save the hardware hash
 try {
-    Write-Host "Registering device with Autopilot (Commercial tenant)..." -ForegroundColor Green
-    Get-WindowsAutopilotInfo.ps1 -Online -Assign
-    Write-Log "Device registered to Autopilot with GroupTag Serco-OOBE"
+    Write-Host "Generating hardware hash and saving to $hashPath"
+    Get-WindowsAutopilotInfo.ps1 -OutputFile $hashPath
+    Write-Host "✅ Hardware hash saved"
 } catch {
-    Write-Log "Autopilot registration failed: $($_.Exception.Message)"
+    Write-Host "❌ Failed to generate hardware hash: $($_.Exception.Message)"
 }
 
 # Enable FIPS policy
@@ -25,18 +34,15 @@ if (-not (Test-Path $FipsRegistryPath)) {
     New-Item -Path $FipsRegistryPath -Force | Out-Null
 }
 Set-ItemProperty -Path $FipsRegistryPath -Name "Enabled" -Value 1
-Write-Log "FIPS Algorithm Policy enabled"
 
 # Set Data Execution Prevention to OptOut
 try {
     Start-Process -FilePath "bcdedit.exe" -ArgumentList "/set nx optout" -NoNewWindow -Wait
-    Write-Log "Successfully executed: bcdedit /set nx optout"
 } catch {
-    Write-Log "Failed to execute bcdedit: $($_.Exception.Message)"
+    Write-Host "Failed to execute bcdedit: $($_.Exception.Message)"
 }
 
 # Run OOBEDeploy
 Write-Host "Running OOBEDeploy tasks..." -ForegroundColor Cyan
 Start-OOBEDeploy
-Write-Log "Start-OOBEDeploy executed"
 
