@@ -81,7 +81,7 @@ try {
 }
 
 # Call MAK activation script directly
-$makScript = "C:\OSDCloud\Config\Scripts\startup\Set-WindowsActivation.ps1"
+$makScript = "C:\OSDCloud\Scripts\setupcomplete\Set-WindowsActivation.ps1"
 if (Test-Path $makScript) {
     Write-Log "▶️ Running MAK activation script..."
     try {
