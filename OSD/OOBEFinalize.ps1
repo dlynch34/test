@@ -94,7 +94,4 @@ if (Test-Path $makScript) {
     Write-Log "⚠️ MAK activation script not found at: $makScript"
 }
 
-# Reboot to finalize activation and policy
-Write-Log "🔁 Rebooting to complete MAK activation..."
-Start-Sleep -Seconds 10
-Restart-Computer -Force
+
