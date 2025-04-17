@@ -9,6 +9,18 @@ function Write-Log {
 }
 Write-Log "===== Starting OOBE Finalization ====="
 
+# Prevent Windows 11 automatic device encryption
+try {
+    $regPath = "HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker"
+    if (-not (Test-Path $regPath)) {
+        New-Item -Path $regPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $regPath -Name "PreventDeviceEncryption" -Value 1 -Type DWord -Force
+    Write-Log "✅ PreventDeviceEncryption registry key set"
+} catch {
+    Write-Log "❌ Failed to set PreventDeviceEncryption key: $($_.Exception.Message)"
+}
+
 # Install and import OSD module
 try {
     if (-not (Get-Module -ListAvailable -Name OSD)) {
@@ -41,57 +53,5 @@ try {
     Write-Log "❌ Failed to execute bcdedit: $($_.Exception.Message)"
 }
 
-# Ensure Software Protection Service is running
-try {
-    $service = Get-Service -Name sppsvc -ErrorAction Stop
-    if ($service.Status -ne 'Running') {
-        Start-Service -Name sppsvc
-        Start-Sleep -Seconds 5
-        Write-Log "✅ sppsvc (Software Protection Service) started"
-    } else {
-        Write-Log "sppsvc already running"
-    }
-} catch {
-    Write-Log "❌ Failed to check/start sppsvc: $($_.Exception.Message)"
-}
-
-# Remove any existing KMS activation key (upk + cpky only)
-Write-Log "Removing KMS client activation keys..."
-try {
-    $exit1 = (Start-Process -FilePath "cscript.exe" -ArgumentList "//nologo $env:SystemRoot\System32\slmgr.vbs /upk" -NoNewWindow -Wait -PassThru).ExitCode
-    $exit2 = (Start-Process -FilePath "cscript.exe" -ArgumentList "//nologo $env:SystemRoot\System32\slmgr.vbs /cpky" -NoNewWindow -Wait -PassThru).ExitCode
-
-    if ($exit1 -eq 0 -and $exit2 -eq 0) {
-        Write-Log "✅ KMS keys removed successfully (/upk, /cpky)"
-    } else {
-        Write-Log "⚠️ One or more KMS removal steps may have failed:"
-        Write-Log "  /upk exit code: $exit1"
-        Write-Log "  /cpky exit code: $exit2"
-    }
-} catch {
-    Write-Log "❌ Exception occurred during KMS cleanup: $($_.Exception.Message)"
-}
-
-# Run OOBEDeploy (optional)
-try {
-    Start-OOBEDeploy
-    Write-Log "✅ Start-OOBEDeploy executed successfully"
-} catch {
-    Write-Log "❌ Failed to run Start-OOBEDeploy: $($_.Exception.Message)"
-}
-
-# Call MAK activation script directly
-$makScript = "C:\OSDCloud\Scripts\setupcomplete\Set-WindowsActivation.ps1"
-if (Test-Path $makScript) {
-    Write-Log "▶️ Running MAK activation script..."
-    try {
-        & $makScript
-        Write-Log "✅ MAK activation script executed"
-    } catch {
-        Write-Log "❌ MAK activation script failed: $($_.Exception.Message)"
-    }
-} else {
-    Write-Log "⚠️ MAK activation script not found at: $makScript"
-}
 
 
