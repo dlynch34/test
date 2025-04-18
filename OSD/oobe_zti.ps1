@@ -80,6 +80,17 @@ if ($WindowsPhase -eq 'WinPE') {
     } catch {
         Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
     }
+# Download RemoveBitlockerblock.ps1 (for post-OOBE scheduled task)
+$BitLockerBlockUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
+$BitLockerBlockPath = "C:\ProgramData\Remove-BitLockerBlock.ps1"
+
+try {
+    Write-Host "[Test] Downloading RemoveBitlockerblock.ps1..."
+    Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile $BitLockerBlockPath -UseBasicParsing
+    Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded to C:\ProgramData"
+} catch {
+    Write-Warning "⚠️ Failed to download RemoveBitlockerblock.ps1: $_"
+}
 
     $null = Stop-Transcript -ErrorAction Ignore
 
