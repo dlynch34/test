@@ -20,7 +20,6 @@ else {
 }
 
 Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
-#Invoke-Expression -Command (Invoke-RestMethod -Uri https://functions.osdcloud.com)
 #endregion
 
 #region Admin Elevation
@@ -41,9 +40,7 @@ Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
 
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
-    #osdcloud-StartWinPE -OSDCloud
-   Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
-
+    Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
     # ============================================
     # Inject OOBE Files from GitHub before reboot
@@ -51,14 +48,6 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "Injecting Unattend.xml, OSDeploy.OOBEDeploy.json, and SetupComplete.cmd..."
 
     $OSDrive = "C:"
-#$RenameScriptUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RenameDevice.ps1"
-$ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
-New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
-
-    $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
-    $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
-    $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-
     $ProgramDataPath = Join-Path $OSDrive "ProgramData\OSDeploy"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
     $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
@@ -66,6 +55,12 @@ New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
     New-Item -Path $ProgramDataPath -ItemType Directory -Force | Out-Null
     New-Item -Path $PantherPath -ItemType Directory -Force | Out-Null
     New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
+
+    $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+    $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
+    $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    $BitLockerBlockUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
+    $BitLockerBlockPath = "C:\ProgramData\Remove-BitLockerBlock.ps1"
 
     try {
         Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $ProgramDataPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
@@ -86,6 +81,22 @@ New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
         Write-Host -ForegroundColor Green "✅ SetupComplete.cmd downloaded"
     } catch {
         Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
+    }
+
+    # ============================================
+    # Download and register BitLocker unblock script
+    # ============================================
+    try {
+        Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile $BitLockerBlockPath -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded"
+        
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$BitLockerBlockPath`""
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        $trigger.Delay = "00:15:00"
+        Register-ScheduledTask -TaskName "RemoveBitLockerBlockDelay" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM" -Force
+        Write-Host -ForegroundColor Green "📝 Scheduled task registered to run RemoveBitLockerBlock.ps1 at startup (15 min delay)"
+    } catch {
+        Write-Warning "⚠️ Failed to download or register RemoveBitlockerblock.ps1: $_"
     }
 
     $null = Stop-Transcript -ErrorAction Ignore
