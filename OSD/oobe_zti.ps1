@@ -1,5 +1,5 @@
-[CmdletBinding()]
-param()
+# Allow script to run without interactive confirmation
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 $ScriptName = 'sandbox.osdcloud.com'
 $ScriptVersion = '25.3.1.1'
@@ -83,13 +83,10 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
     }
 
-    # ============================================
-    # Download and register BitLocker unblock script
-    # ============================================
     try {
         Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile $BitLockerBlockPath -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded"
-        
+
         $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$BitLockerBlockPath`""
         $trigger = New-ScheduledTaskTrigger -AtStartup
         $trigger.Delay = "00:15:00"
@@ -100,6 +97,17 @@ if ($WindowsPhase -eq 'WinPE') {
     }
 
     $null = Stop-Transcript -ErrorAction Ignore
+
+    # Diagnostic check and hold
+    if (-not (Test-Path "C:\Windows")) {
+        Write-Host -ForegroundColor Red "[!] WARNING: C:\\Windows not found. OS may have failed to stage."
+    } else {
+        Write-Host -ForegroundColor Green "[+] Detected C:\\Windows - OS appears staged successfully."
+    }
+
+    Read-Host "Press Enter to reboot..."
+    Write-Host -ForegroundColor Green "Restarting..."
+    wpeutil reboot
 }
 #endregion
 
@@ -127,8 +135,3 @@ if ($WindowsPhase -eq 'Windows') {
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
-
-# Final Reboot
-Write-Host -ForegroundColor Green "Restarting in 20 seconds..."
-Start-Sleep -Seconds 20
-wpeutil reboot
