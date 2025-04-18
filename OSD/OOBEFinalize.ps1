@@ -53,5 +53,59 @@ try {
     Write-Log "❌ Failed to execute bcdedit: $($_.Exception.Message)"
 }
 
+# Remove built-in apps (Windows 11 bloatware)
+Write-Log "📦 Starting removal of built-in apps and provisioned packages..."
 
+$AppsToRemove = @(
+    "MicrosoftTeams",
+    "Microsoft.BingWeather",
+    "Microsoft.BingNews",
+    "Microsoft.GamingApp",
+    "Microsoft.GetHelp",
+    "Microsoft.Getstarted",
+    "Microsoft.MicrosoftOfficeHub",
+    "Microsoft.MicrosoftSolitaireCollection",
+    "Microsoft.MicrosoftStickyNotes",
+    "Microsoft.MSPaint",
+    "Microsoft.People",
+    "Microsoft.PowerAutomateDesktop",
+    "Microsoft.StorePurchaseApp",
+    "Microsoft.Todos",
+    "microsoft.windowscommunicationsapps",
+    "Microsoft.WindowsFeedbackHub",
+    "Microsoft.WindowsMaps",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.Xbox.TCUI",
+    "Microsoft.XboxGamingOverlay",
+    "Microsoft.XboxIdentityProvider",
+    "Microsoft.XboxSpeechToTextOverlay",
+    "Microsoft.YourPhone",
+    "Microsoft.ZuneMusic",
+    "Microsoft.ZuneVideo",
+    "Microsoft.OutlookForWindows",
+    "5319275A.WhatsAppDesktop",
+    "Facebook.InstagramBeta",
+    "Facebook.Facebook",
+    "TikTok.TikTok",
+    "AmazonVideo.PrimeVideo",
+    "Microsoft.Microsoft365"
+)
 
+foreach ($app in $AppsToRemove) {
+    try {
+        Get-AppxPackage -Name $app -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction Stop
+        Write-Log "✅ Removed installed package: $app"
+    } catch {
+        Write-Log "⚠️ Could not remove installed package $app: $($_.Exception.Message)"
+    }
+
+    try {
+        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $app |
+            Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+        Write-Log "🗑️ Removed provisioned package: $app"
+    } catch {
+        Write-Log "⚠️ Could not remove provisioned package $app: $($_.Exception.Message)"
+    }
+}
+
+Write-Log "✅ OOBE Finalization complete."
