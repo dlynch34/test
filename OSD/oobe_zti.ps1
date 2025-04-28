@@ -100,7 +100,7 @@ try {
         Write-Host -ForegroundColor Green "[+] Detected C:\\Windows - OS appears staged successfully."
     }
 
-    Read-Host "Press Enter to reboot..."
+   
     Write-Host -ForegroundColor Green "Restarting..."
     wpeutil reboot
 }
