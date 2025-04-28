@@ -109,7 +109,7 @@ foreach ($app in $AppsToRemove) {
 }
 
 # --- Delayed removal of PreventDeviceEncryption to allow Intune BitLocker policy ---
-Write-Log "📝 Creating delayed task to remove PreventDeviceEncryption key post-OOBE"
+Write-Log "📝 Setting up RunOnce to remove PreventDeviceEncryption key post-OOBE"
 
 $BitLockerBlockUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
 $BitLockerBlockPath = "C:\ProgramData\Remove-BitLockerBlock.ps1"
@@ -118,13 +118,14 @@ try {
     Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile $BitLockerBlockPath -UseBasicParsing
     Write-Log "✅ RemoveBitlockerblock.ps1 downloaded"
 
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$BitLockerBlockPath`""
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-    $trigger.Delay = "00:15:00"
-    Register-ScheduledTask -TaskName "RemoveBitLockerBlockDelay" -Action $action -Trigger $trigger -RunLevel Highest -User "SYSTEM" -Force
-    Write-Log "📝 Scheduled task registered to run RemoveBitLockerBlock.ps1 at startup (15 min delay)"
+    Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce" `
+        -Name "RemoveBitLockerBlock" `
+        -Value "powershell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$BitLockerBlockPath`""
+
+    Write-Log "📝 RunOnce registry key created to run RemoveBitLockerBlock.ps1 at next full boot"
 } catch {
-    Write-Log "⚠️ Failed to download or register RemoveBitlockerblock.ps1: $($_.Exception.Message)"
+    Write-Log "⚠️ Failed to download or set RunOnce for RemoveBitLockerBlock.ps1: $($_.Exception.Message)"
 }
 
 Write-Log "✅ OOBE Finalization complete."
+
