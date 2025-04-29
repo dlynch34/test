@@ -45,7 +45,7 @@ if ($WindowsPhase -eq 'WinPE') {
 
     Write-Host -ForegroundColor Cyan "[Test] Injecting OOBE files..."
     $OSDrive = "C:"
-    $ProgramDataPath = Join-Path $OSDrive "ProgramData\OSDeploy"
+    $ProgramDataPath = Join-Path $OSDrive "ProgramData"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
     $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
 
@@ -53,18 +53,23 @@ if ($WindowsPhase -eq 'WinPE') {
     New-Item -Path $PantherPath -ItemType Directory -Force | Out-Null
     New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
 
-    $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
-    $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
-    $SetupCompleteUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    # URLs to required config files
+    $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+    $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
+    $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    $FinalizeUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
+    $BitLockerBlockUrl  = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
 
+    # Download OOBEDeploy config
     try {
-        Write-Host "[Test] Downloading OOBEDeploy JSON..."
-        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $ProgramDataPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
+        Write-Host "[Test] Downloading OSDeploy.OOBEDeploy.json..."
+        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $ProgramDataPath "OSDeploy\OSDeploy.OOBEDeploy.json") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ OSDeploy.OOBEDeploy.json downloaded"
     } catch {
-        Write-Warning "⚠️ Failed to download OOBEDeploy JSON: $_"
+        Write-Warning "⚠️ Failed to download OSDeploy.OOBEDeploy.json: $_"
     }
 
+    # Download Unattend.xml
     try {
         Write-Host "[Test] Downloading Unattend.xml..."
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
@@ -73,6 +78,7 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
+    # Download SetupComplete.cmd
     try {
         Write-Host "[Test] Downloading SetupComplete.cmd..."
         Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
@@ -80,27 +86,33 @@ if ($WindowsPhase -eq 'WinPE') {
     } catch {
         Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
     }
-# Download RemoveBitlockerblock.ps1 (for post-OOBE scheduled task)
-$BitLockerBlockUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
-$BitLockerBlockPath = "C:\ProgramData\Remove-BitLockerBlock.ps1"
 
-try {
-    Write-Host "[Test] Downloading RemoveBitlockerblock.ps1..."
-    Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile $BitLockerBlockPath -UseBasicParsing
-    Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded to C:\ProgramData"
-} catch {
-    Write-Warning "⚠️ Failed to download RemoveBitlockerblock.ps1: $_"
-}
+    # Download OOBEFinalize.ps1
+    try {
+        Write-Host "[Test] Downloading OOBEFinalize.ps1..."
+        Invoke-WebRequest -Uri $FinalizeUrl -OutFile (Join-Path $ProgramDataPath "OOBEFinalize.ps1") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
+    }
+
+    # Download RemoveBitlockerblock.ps1
+    try {
+        Write-Host "[Test] Downloading RemoveBitlockerblock.ps1..."
+        Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile (Join-Path $ProgramDataPath "Remove-BitLockerBlock.ps1") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download RemoveBitlockerblock.ps1: $_"
+    }
 
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
-        Write-Host -ForegroundColor Red "[!] WARNING: C:\\Windows not found. OS may have failed to stage."
+        Write-Host -ForegroundColor Red "[!] WARNING: C:\Windows not found. OS may have failed to stage."
     } else {
-        Write-Host -ForegroundColor Green "[+] Detected C:\\Windows - OS appears staged successfully."
+        Write-Host -ForegroundColor Green "[+] Detected C:\Windows - OS appears staged successfully."
     }
 
-   
     Write-Host -ForegroundColor Green "Restarting..."
     wpeutil reboot
 }
