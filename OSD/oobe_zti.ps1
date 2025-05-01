@@ -56,7 +56,7 @@ if ($WindowsPhase -eq 'WinPE') {
     # URLs to required config files
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
-    $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    #$SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
    
     # Download OOBEDeploy config
     try {
@@ -76,16 +76,7 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
-    # Download SetupComplete.cmd
-    try {
-        Write-Host "[Test] Downloading SetupComplete.cmd..."
-        Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ SetupComplete.cmd downloaded"
-    } catch {
-        Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
-    }
-
-   
+    
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
