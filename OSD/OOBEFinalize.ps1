@@ -9,12 +9,21 @@ function Write-Log {
 }
 Write-Log "===== Starting OOBE Finalization ====="
 
-# Disable BitLocker temporarily on OS volume if auto-enabled
-$osDrive = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
-if ($osDrive.ProtectionStatus -eq 'On') {
-    Suspend-BitLocker -MountPoint "C:" -RebootCount 0
+# Check and suspend BitLocker if already enabled
+try {
+    $osDrive = Get-BitLockerVolume -MountPoint "C:" -ErrorAction Stop
+    if ($osDrive.ProtectionStatus -eq 'On') {
+        Write-Log "BitLocker detected as enabled. Suspending..."
+        Suspend-BitLocker -MountPoint "C:" -RebootCount 0
+    } else {
+        Write-Log "BitLocker not yet enabled."
+    }
+} catch {
+    Write-Log "BitLocker volume not found or failed to query: $_"
 }
 
-# Disable automatic BitLocker provisioning for the session
-reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f
-reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f
+# Disable automatic BitLocker provisioning
+Write-Log "Disabling BitLocker auto-provisioning..."
+reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f | Out-Null
+reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
+Write-Log "BitLocker provisioning policies applied."
