@@ -87,24 +87,7 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download SetupComplete.cmd: $_"
     }
 
-    # Download OOBEFinalize.ps1
-    try {
-        Write-Host "[Test] Downloading OOBEFinalize.ps1..."
-        Invoke-WebRequest -Uri $FinalizeUrl -OutFile (Join-Path $ProgramDataPath "OOBEFinalize.ps1") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
-    } catch {
-        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
-    }
-
-    # Download RemoveBitlockerblock.ps1
-    try {
-        Write-Host "[Test] Downloading RemoveBitlockerblock.ps1..."
-        Invoke-WebRequest -Uri $BitLockerBlockUrl -OutFile (Join-Path $ProgramDataPath "Remove-BitLockerBlock.ps1") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ RemoveBitlockerblock.ps1 downloaded"
-    } catch {
-        Write-Warning "⚠️ Failed to download RemoveBitlockerblock.ps1: $_"
-    }
-
+   
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
