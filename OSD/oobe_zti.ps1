@@ -57,9 +57,7 @@ if ($WindowsPhase -eq 'WinPE') {
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-    $FinalizeUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
-    $BitLockerBlockUrl  = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/RemoveBitlockerblock.ps1"
-
+   
     # Download OOBEDeploy config
     try {
         Write-Host "[Test] Downloading OSDeploy.OOBEDeploy.json..."
