@@ -56,8 +56,27 @@ if ($WindowsPhase -eq 'WinPE') {
     # URLs to required config files
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
-    #$SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-   
+    $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    $OOBEFinalizeUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
+
+   try {
+    Write-Host "[Test] Downloading OOBEFinalize.ps1..."
+    Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile "C:\ProgramData\OSDCloud\Scripts\OOBEFinalize.ps1" -UseBasicParsing
+    Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
+} catch {
+    Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
+}
+
+try {
+    Write-Host "[Test] Downloading setupcomplete.cmd..."
+    Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
+    Write-Host -ForegroundColor Green "✅ setupcomplete.cmd downloaded"
+} catch {
+    Write-Warning "⚠️ Failed to download setupcomplete.cmd: $_"
+}
+
+
+
     # Download OOBEDeploy config
     try {
         Write-Host "[Test] Downloading OSDeploy.OOBEDeploy.json..."
