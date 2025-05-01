@@ -43,6 +43,28 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "[Test] Starting OSDCloud..."
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
+    # Disable BitLocker auto-provisioning in offline Windows image
+    $offlineSoftwareHive = "C:\Windows\System32\Config\SOFTWARE"
+
+    if (Test-Path $offlineSoftwareHive) {
+        try {
+            Write-Host "[BitLocker] Loading offline SOFTWARE hive..."
+            reg load HKLM\TempHive $offlineSoftwareHive | Out-Null
+
+            reg add "HKLM\TempHive\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
+            reg add "HKLM\TempHive\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f | Out-Null
+
+            reg unload HKLM\TempHive | Out-Null
+            Write-Host "[BitLocker] ✅ Disabled BitLocker auto-provisioning in offline OS."
+        } catch {
+            Write-Warning "[BitLocker] ❌ Failed to configure BitLocker registry settings: $_"
+        }
+    } else {
+        Write-Warning "[BitLocker] Offline SOFTWARE hive not found. Skipping BitLocker config."
+    }
+
+
+
     Write-Host -ForegroundColor Cyan "[Test] Injecting OOBE files..."
     $OSDrive = "C:"
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
