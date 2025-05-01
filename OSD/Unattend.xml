@@ -19,9 +19,5 @@
       </OOBE>
       <TimeZone>Eastern Standard Time</TimeZone>
     </component>
-
-    <component name="Microsoft-Windows-EnhancedStorage-Adm" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-      <PreventDeviceEncryption>true</PreventDeviceEncryption>
-    </component>
   </settings>
 </unattend>
