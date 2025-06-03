@@ -57,23 +57,5 @@ try {
     }
 } catch { Write-Log "Could not query BitLocker status: $_" }
 
-# ----------------------------------------------------------------------
-# 5. OPTIONAL – Force Windows Update scan / download / install
-# ----------------------------------------------------------------------
-try {
-    Write-Log "Windows Update: starting ScanInstallWait sequence…"
-    $uso = "$env:SystemRoot\System32\UsoClient.exe"
-
-    Start-Process -FilePath $uso -ArgumentList "ScanInstallWait" -Wait
-    Write-Log "Windows Update: ScanInstallWait completed."
-
-    # second quick pass
-    Start-Process -FilePath $uso -ArgumentList "StartScan"     -Wait
-    Start-Process -FilePath $uso -ArgumentList "StartDownload" -Wait
-    Start-Process -FilePath $uso -ArgumentList "StartInstall"  -Wait
-    Write-Log "Windows Update: second-pass Scan/Download/Install completed."
-} catch {
-    Write-Log "Windows Update: error during update sequence: $_"
-}
 
 Write-Log "===== OOBE Finalization complete – device ready for Intune BitLocker enforcement ====="
