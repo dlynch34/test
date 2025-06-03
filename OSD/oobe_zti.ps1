@@ -43,25 +43,6 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "[Test] Starting OSDCloud..."
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    $offlineSoftwareHive = "C:\Windows\System32\Config\SOFTWARE"
-
-    if (Test-Path $offlineSoftwareHive) {
-        try {
-            Write-Host "[BitLocker] Loading offline SOFTWARE hive..."
-            reg load HKLM\TempHive $offlineSoftwareHive | Out-Null
-
-            reg add "HKLM\TempHive\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
-            reg add "HKLM\TempHive\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f | Out-Null
-
-            reg unload HKLM\TempHive | Out-Null
-            Write-Host "[BitLocker] ✅ Disabled BitLocker auto-provisioning in offline OS."
-        } catch {
-            Write-Warning "[BitLocker] ❌ Failed to configure BitLocker registry settings: $_"
-        }
-    } else {
-        Write-Warning "[BitLocker] Offline SOFTWARE hive not found. Skipping BitLocker config."
-    }
-
     Write-Host -ForegroundColor Cyan "[Test] Injecting OOBE files..."
     $OSDrive = "C:"
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
@@ -77,15 +58,6 @@ if ($WindowsPhase -eq 'WinPE') {
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-    $OOBEFinalizeUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
-
-    try {
-        Write-Host "[Test] Downloading OOBEFinalize.ps1..."
-        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile (Join-Path $OOBECloudScriptPath "OOBEFinalize.ps1") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
-    } catch {
-        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
-    }
 
     try {
         Write-Host "[Test] Downloading setupcomplete.cmd..."
@@ -140,7 +112,21 @@ if ($WindowsPhase -eq 'AuditMode') {
 
 #region OOBE Phase
 if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Yellow "OOBE Phase - no config written here, it was injected in WinPE"
+    Write-Host -ForegroundColor Yellow "[+] OOBE Phase - downloading and running OOBEFinalize.ps1 from webhook..."
+    $WebhookUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
+    $TempOOBEFinalize = "$env:TEMP\OOBEFinalize.ps1"
+
+    try {
+        Invoke-WebRequest -Uri $WebhookUrl -OutFile $TempOOBEFinalize -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
+
+        Write-Host -ForegroundColor Cyan "[*] Running downloaded OOBEFinalize.ps1..."
+        & $TempOOBEFinalize
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 executed successfully."
+    } catch {
+        Write-Host -ForegroundColor Red "❌ Failed to download or execute OOBEFinalize.ps1: $_"
+    }
+
     $null = Stop-Transcript -ErrorAction Ignore
 }
 #endregion
