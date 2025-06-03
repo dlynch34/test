@@ -1,5 +1,5 @@
 # ======================================================================
-# OOBE.ps1  –  Defer Windows auto-encryption but keep Intune BitLocker free
+# OOBE.ps1 – Defer Windows auto-encryption, update OS, keep Intune free
 # ======================================================================
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
@@ -13,8 +13,7 @@ function Write-Log {
 Write-Log "===== Starting OOBE Finalization ====="
 
 # ----------------------------------------------------------------------
-# 1.  *Defer* the built-in device-encryption (XTS-AES-128) during OOBE
-#     by enabling the OEM flag  DisableRuntimeProvisioning = 1
+# 1. Defer built-in XTS-AES-128 device-encryption during OOBE
 # ----------------------------------------------------------------------
 try {
     $provKey = 'HKLM:\SOFTWARE\Microsoft\Provisioning\Diagnostics\Config'
@@ -24,8 +23,7 @@ try {
 } catch { Write-Log "Failed to set DisableRuntimeProvisioning: $_" }
 
 # ----------------------------------------------------------------------
-# 2.  Remove the stricter PreventDeviceEncryption flag if an older image
-#     had set it.  (Keeping it would block Intune’s BitLocker policy.)
+# 2. Remove PreventDeviceEncryption if present (unblocks Intune BitLocker)
 # ----------------------------------------------------------------------
 try {
     $blCtrl = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
@@ -38,18 +36,16 @@ try {
 } catch { Write-Log "Error checking/removing PreventDeviceEncryption: $_" }
 
 # ----------------------------------------------------------------------
-# 3.  Keep the two FVE policies that disable TPM-less + auto-provisioning
+# 3. Keep FVE policies that disable TPM-less + auto-provision
 # ----------------------------------------------------------------------
 try {
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" ^
-            /t REG_DWORD /d 0 /f | Out-Null
-    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" ^
-            /t REG_DWORD /d 0 /f | Out-Null
+    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM"          /t REG_DWORD /d 0 /f | Out-Null
+    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
     Write-Log "BitLocker auto-provisioning policies applied (NoTPM=0, AutoProvision=0)."
 } catch { Write-Log "Failed to apply FVE policies: $_" }
 
 # ----------------------------------------------------------------------
-# 4.  If BitLocker somehow began (rare), suspend so Autopilot can finish
+# 4. If BitLocker already active, suspend until staging is done
 # ----------------------------------------------------------------------
 try {
     $os = Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop
@@ -62,28 +58,22 @@ try {
 } catch { Write-Log "Could not query BitLocker status: $_" }
 
 # ----------------------------------------------------------------------
-# OPTIONAL: Force Windows Update scan / download / install  (Win 10/11)
+# 5. OPTIONAL – Force Windows Update scan / download / install
 # ----------------------------------------------------------------------
 try {
-    Log "Windows Update: starting ScanInstallWait sequence…"
-
+    Write-Log "Windows Update: starting ScanInstallWait sequence…"
     $uso = "$env:SystemRoot\System32\UsoClient.exe"
 
-    # Combined command that scans, downloads and installs, then waits
     Start-Process -FilePath $uso -ArgumentList "ScanInstallWait" -Wait
-    Log "Windows Update: ScanInstallWait completed."
+    Write-Log "Windows Update: ScanInstallWait completed."
 
-    # Second pass (rare) – some cumulative updates only install after reboot,
-    # so kick off a fresh scan to catch any remaining patches.
-    Start-Process -FilePath $uso -ArgumentList "StartScan"      -Wait
-    Start-Process -FilePath $uso -ArgumentList "StartDownload"  -Wait
-    Start-Process -FilePath $uso -ArgumentList "StartInstall"   -Wait
-    Log "Windows Update: second-pass StartScan/Download/Install completed."
-
+    # second quick pass
+    Start-Process -FilePath $uso -ArgumentList "StartScan"     -Wait
+    Start-Process -FilePath $uso -ArgumentList "StartDownload" -Wait
+    Start-Process -FilePath $uso -ArgumentList "StartInstall"  -Wait
+    Write-Log "Windows Update: second-pass Scan/Download/Install completed."
 } catch {
-    Log "Windows Update: error during update sequence: $_"
+    Write-Log "Windows Update: error during update sequence: $_"
 }
 
-
 Write-Log "===== OOBE Finalization complete – device ready for Intune BitLocker enforcement ====="
-
