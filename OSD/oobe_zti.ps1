@@ -48,19 +48,19 @@ if ($WindowsPhase -eq 'WinPE') {
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
     $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
-    $OOBECloudScriptPath = Join-Path $ProgramDataPath "OSDCloud\Scripts"
+    $OOBECloudPath   = Join-Path $OSDrive "OSD"
 
     New-Item -Path $ProgramDataPath -ItemType Directory -Force | Out-Null
     New-Item -Path $PantherPath -ItemType Directory -Force | Out-Null
     New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
-    New-Item -Path $OOBECloudScriptPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $OOBECloudPath -ItemType Directory -Force | Out-Null
 
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
+    $OOBEFinalizeUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
 
     try {
-        Write-Host "[Test] Downloading setupcomplete.cmd..."
         Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ setupcomplete.cmd downloaded"
     } catch {
@@ -68,7 +68,6 @@ if ($WindowsPhase -eq 'WinPE') {
     }
 
     try {
-        Write-Host "[Test] Downloading OSDeploy.OOBEDeploy.json..."
         $OOBEDeployPath = Join-Path $ProgramDataPath "OSDeploy"
         New-Item -Path $OOBEDeployPath -ItemType Directory -Force | Out-Null
         Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $OOBEDeployPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
@@ -78,11 +77,17 @@ if ($WindowsPhase -eq 'WinPE') {
     }
 
     try {
-        Write-Host "[Test] Downloading Unattend.xml..."
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ Unattend.xml downloaded"
     } catch {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
+    }
+
+    try {
+        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile (Join-Path $OOBECloudPath "OOBEFinalize.ps1") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded to C:\OSD"
+    } catch {
+        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
     }
 
     $null = Stop-Transcript -ErrorAction Ignore
@@ -98,41 +103,7 @@ if ($WindowsPhase -eq 'WinPE') {
 }
 #endregion
 
-#region Specialize Phase
-if ($WindowsPhase -eq 'Specialize') {
-    $null = Stop-Transcript -ErrorAction Ignore
-}
+#region Other Phases
+$null = Stop-Transcript -ErrorAction Ignore
 #endregion
 
-#region AuditMode Phase
-if ($WindowsPhase -eq 'AuditMode') {
-    $null = Stop-Transcript -ErrorAction Ignore
-}
-#endregion
-
-#region OOBE Phase
-if ($WindowsPhase -eq 'OOBE') {
-    Write-Host -ForegroundColor Yellow "[+] OOBE Phase - downloading and running OOBEFinalize.ps1 from webhook..."
-    $WebhookUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
-    $TempOOBEFinalize = "$env:TEMP\OOBEFinalize.ps1"
-
-    try {
-        Invoke-WebRequest -Uri $WebhookUrl -OutFile $TempOOBEFinalize -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
-
-        Write-Host -ForegroundColor Cyan "[*] Running downloaded OOBEFinalize.ps1..."
-        & $TempOOBEFinalize
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 executed successfully."
-    } catch {
-        Write-Host -ForegroundColor Red "❌ Failed to download or execute OOBEFinalize.ps1: $_"
-    }
-
-    $null = Stop-Transcript -ErrorAction Ignore
-}
-#endregion
-
-#region Full Windows Phase
-if ($WindowsPhase -eq 'Windows') {
-    $null = Stop-Transcript -ErrorAction Ignore
-}
-#endregion
