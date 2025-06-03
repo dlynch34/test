@@ -43,7 +43,6 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host -ForegroundColor Cyan "[Test] Starting OSDCloud..."
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    # Disable BitLocker auto-provisioning in offline Windows image
     $offlineSoftwareHive = "C:\Windows\System32\Config\SOFTWARE"
 
     if (Test-Path $offlineSoftwareHive) {
@@ -63,52 +62,49 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "[BitLocker] Offline SOFTWARE hive not found. Skipping BitLocker config."
     }
 
-
-
     Write-Host -ForegroundColor Cyan "[Test] Injecting OOBE files..."
     $OSDrive = "C:"
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
     $ScriptsPath     = Join-Path $OSDrive "Windows\Setup\Scripts"
+    $OOBECloudScriptPath = Join-Path $ProgramDataPath "OSDCloud\Scripts"
 
     New-Item -Path $ProgramDataPath -ItemType Directory -Force | Out-Null
     New-Item -Path $PantherPath -ItemType Directory -Force | Out-Null
     New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
+    New-Item -Path $OOBECloudScriptPath -ItemType Directory -Force | Out-Null
 
-    # URLs to required config files
     $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
     $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-    $OOBEFinalizeUrl = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
+    $OOBEFinalizeUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
 
-   try {
-    Write-Host "[Test] Downloading OOBEFinalize.ps1..."
-    Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile "C:\ProgramData\OSDCloud\Scripts\OOBEFinalize.ps1" -UseBasicParsing
-    Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
-} catch {
-    Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
-}
+    try {
+        Write-Host "[Test] Downloading OOBEFinalize.ps1..."
+        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile (Join-Path $OOBECloudScriptPath "OOBEFinalize.ps1") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
+    }
 
-try {
-    Write-Host "[Test] Downloading setupcomplete.cmd..."
-    Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
-    Write-Host -ForegroundColor Green "✅ setupcomplete.cmd downloaded"
-} catch {
-    Write-Warning "⚠️ Failed to download setupcomplete.cmd: $_"
-}
+    try {
+        Write-Host "[Test] Downloading setupcomplete.cmd..."
+        Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ setupcomplete.cmd downloaded"
+    } catch {
+        Write-Warning "⚠️ Failed to download setupcomplete.cmd: $_"
+    }
 
-
-
-    # Download OOBEDeploy config
     try {
         Write-Host "[Test] Downloading OSDeploy.OOBEDeploy.json..."
-        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $ProgramDataPath "OSDeploy\OSDeploy.OOBEDeploy.json") -UseBasicParsing
+        $OOBEDeployPath = Join-Path $ProgramDataPath "OSDeploy"
+        New-Item -Path $OOBEDeployPath -ItemType Directory -Force | Out-Null
+        Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $OOBEDeployPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ OSDeploy.OOBEDeploy.json downloaded"
     } catch {
         Write-Warning "⚠️ Failed to download OSDeploy.OOBEDeploy.json: $_"
     }
 
-    # Download Unattend.xml
     try {
         Write-Host "[Test] Downloading Unattend.xml..."
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
@@ -117,7 +113,6 @@ try {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
-    
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
