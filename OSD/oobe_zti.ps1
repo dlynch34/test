@@ -60,7 +60,7 @@ if ($WindowsPhase -eq 'WinPE') {
     $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
     $OOBEFinalizeUrl  = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
 
-    # Download OOBEDeploy
+    # Download OSDeploy JSON
     try {
         $OOBEDeployPath = Join-Path $ProgramDataPath "OSDeploy"
         New-Item -Path $OOBEDeployPath -ItemType Directory -Force | Out-Null
@@ -70,7 +70,7 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download OSDeploy.OOBEDeploy.json: $_"
     }
 
-    # Download unattend.xml
+    # Download Unattend.xml
     try {
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ Unattend.xml downloaded"
@@ -78,16 +78,17 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
-    # Download and set up OOBEFinalize.ps1 + SetupComplete.cmd
+    # Download and prepare OOBEFinalize.ps1 and SetupComplete.cmd
     try {
         $OOBEFinalizeDst = Join-Path $ScriptsPath "OOBEFinalize.ps1"
         $SetupCompletePath = Join-Path $ScriptsPath "SetupComplete.cmd"
 
-        # Download Finalize script to Setup\Scripts
-        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile $OOBEFinalizeDst -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded to $OOBEFinalizeDst"
+        # Clean-download OOBEFinalize.ps1 without BOM
+        $rawScript = Invoke-WebRequest -Uri $OOBEFinalizeUrl -UseBasicParsing
+        $rawScript.Content | Set-Content -Path $OOBEFinalizeDst -Encoding UTF8
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded and cleaned (no BOM)"
 
-        # Write SetupComplete.cmd that launches the finalization script
+        # Write SetupComplete.cmd that runs OOBEFinalize.ps1
         @"
 @echo off
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%SystemRoot%\Setup\Scripts\OOBEFinalize.ps1""
@@ -96,7 +97,7 @@ exit /b 0
 
         Write-Host -ForegroundColor Green "✅ SetupComplete.cmd written to launch OOBEFinalize.ps1"
     } catch {
-        Write-Warning "⚠️ Failed to prepare OOBE finalization: $_"
+        Write-Warning "⚠️ Failed to prepare OOBE finalization script: $_"
     }
 
     # Wrap-up and reboot
