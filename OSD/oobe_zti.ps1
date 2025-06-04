@@ -43,17 +43,6 @@ if ($WindowsPhase -eq 'WinPE') {
     Write-Host "[*] Starting OSDCloud..."
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    # Inject PreventDeviceEncryption in offline registry
-    try {
-        Write-Host "[*] Injecting PreventDeviceEncryption=1 into offline registry..."
-        reg load HKLM\TempHive C:\Windows\System32\Config\SYSTEM
-        reg add "HKLM\TempHive\ControlSet001\Control\BitLocker" /v PreventDeviceEncryption /t REG_DWORD /d 1 /f
-        reg unload HKLM\TempHive
-        Write-Host "[+] Offline registry: PreventDeviceEncryption set"
-    } catch {
-        Write-Host "[!] Failed to inject PreventDeviceEncryption offline: $_"
-    }
-
     Write-Host "[*] Injecting OOBE files..."
     $OSDrive = "C:"
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
