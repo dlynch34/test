@@ -87,3 +87,45 @@ try {
     Write-Log "Error during encryption method check or decryption: $_"
 }
 
+# ─────── Windows Update via COM object (works during OOBE) ───────
+try {
+    Write-Log "Ensuring Windows Update service (wuauserv) is started..."
+
+    $wu = Get-Service -Name wuauserv -ErrorAction Stop
+    if ($wu.Status -ne 'Running') {
+        Set-Service -Name wuauserv -StartupType Automatic
+        Start-Service -Name wuauserv
+        Write-Log "Windows Update service started."
+    } else {
+        Write-Log "Windows Update service already running."
+    }
+
+    Write-Log "Using COM object to trigger Windows Update…"
+    $updateSession = New-Object -ComObject Microsoft.Update.Session
+    $updateSearcher = $updateSession.CreateUpdateSearcher()
+    $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
+
+    if ($searchResult.Updates.Count -eq 0) {
+        Write-Log "No applicable updates found."
+    } else {
+        Write-Log "Found $($searchResult.Updates.Count) update(s) to install."
+
+        $updatesToDownload = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($update in $searchResult.Updates) {
+            $updatesToDownload.Add($update) | Out-Null
+            Write-Log "Queued: $($update.Title)"
+        }
+
+        $downloader = $updateSession.CreateUpdateDownloader()
+        $downloader.Updates = $updatesToDownload
+        $downloader.Download()
+
+        $installer = $updateSession.CreateUpdateInstaller()
+        $installer.Updates = $updatesToDownload
+        $installationResult = $installer.Install()
+
+        Write-Log "Updates installed: $($installationResult.Updates.Count)"
+    }
+} catch {
+    Write-Log "Error applying updates via COM"
+}
