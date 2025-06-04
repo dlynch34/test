@@ -1,10 +1,10 @@
 # ======================================================================
-# OOBE.ps1 – Defer Windows auto-encryption, update OS, keep Intune free
+# OOBE.ps1 – Block auto-encryption, trigger Windows Updates
 # ======================================================================
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
-# ----- logging helper -------------------------------------------------
+# ----- Logging helper -------------------------------------------------
 $logPath = "C:\ProgramData\OOBEFinalize.log"
 function Write-Log {
     param([string]$msg)
@@ -13,30 +13,45 @@ function Write-Log {
 Write-Log "===== Starting OOBE Finalization ====="
 
 # ----------------------------------------------------------------------
-# 1. Disable OOBE device encryption runtime provisioning
-# ----------------------------------------------------------------------
-try {
-    $provKey = 'HKLM:\SOFTWARE\Microsoft\Provisioning\Diagnostics\Config'
-    if (-not (Test-Path $provKey)) {
-        New-Item -Path $provKey -Force | Out-Null
-    }
-    Set-ItemProperty -Path $provKey -Name 'DisableRuntimeProvisioning' -Value 1 -Type DWord -Force
-    Write-Log "Set DisableRuntimeProvisioning = 1 (blocks auto-encryption during OOBE)"
-} catch {
-    Write-Log "Failed to set DisableRuntimeProvisioning: $_"
-}
-
-# ----------------------------------------------------------------------
-# 2. Optional: Remove PreventDeviceEncryption if present
+# 1. Ensure PreventDeviceEncryption is set = 1 (block device encryption)
 # ----------------------------------------------------------------------
 try {
     $blCtrl = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
-    if (Get-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -ErrorAction SilentlyContinue) {
-        Remove-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -Force
-        Write-Log "Removed PreventDeviceEncryption legacy value"
+    if (-not (Test-Path $blCtrl)) {
+        New-Item -Path $blCtrl -Force | Out-Null
+    }
+    Set-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -Value 1 -Type DWord -Force
+    Write-Log "Set PreventDeviceEncryption = 1 to block auto-encryption"
+} catch {
+    Write-Log "Failed to set PreventDeviceEncryption: $_"
+}
+
+# ----------------------------------------------------------------------
+# 2. Ensure Windows Update Agent (wuauserv) is running and responsive
+# ----------------------------------------------------------------------
+try {
+    Write-Log "Ensuring Windows Update Agent (wuauserv) is running..."
+
+    $wuAttempts = 0
+    do {
+        $wuAttempts++
+        $wu = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
+        if ($wu -and $wu.Status -eq 'Running') {
+            Write-Log "wuauserv is running"
+            break
+        } else {
+            Write-Log "Waiting for wuauserv to start... attempt $wuAttempts"
+            Set-Service -Name wuauserv -StartupType Automatic -ErrorAction SilentlyContinue
+            Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 10
+        }
+    } while ($wuAttempts -lt 6)
+
+    if ($wu.Status -ne 'Running') {
+        throw "wuauserv did not start in time"
     }
 } catch {
-    Write-Log "Error removing PreventDeviceEncryption: $_"
+    Write-Log "Failed to ensure Windows Update service is running: $_"
 }
 
 # ----------------------------------------------------------------------
@@ -44,15 +59,6 @@ try {
 # ----------------------------------------------------------------------
 try {
     Write-Log "Starting Windows Update COM process..."
-
-    $wu = Get-Service -Name wuauserv -ErrorAction Stop
-    if ($wu.Status -ne 'Running') {
-        Set-Service -Name wuauserv -StartupType Automatic
-        Start-Service -Name wuauserv
-        Write-Log "Windows Update service started"
-    } else {
-        Write-Log "Windows Update service already running"
-    }
 
     $updateSession = New-Object -ComObject Microsoft.Update.Session
     $updateSearcher = $updateSession.CreateUpdateSearcher()
@@ -78,6 +84,7 @@ try {
         $result = $installer.Install()
 
         Write-Log "Windows Updates installed: $($result.Updates.Count)"
+        Write-Log "Install result code: $($result.ResultCode), RebootRequired: $($result.RebootRequired)"
     }
 } catch {
     Write-Log "Windows Update COM error: $_"
