@@ -1,5 +1,5 @@
 # ======================================================================
-# OOBE.ps1 – Defer Windows auto-encryption, update OS, keep Intune free
+# OOBE.ps1 Defer Windows auto-encryption, update OS, keep Intune free
 # ======================================================================
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
@@ -31,7 +31,7 @@ try {
         Remove-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -Force
         Write-Log "Removed legacy PreventDeviceEncryption flag."
     } else {
-        Write-Log "PreventDeviceEncryption not present – nothing to remove."
+        Write-Log "PreventDeviceEncryption not present - nothing to remove."
     }
 } catch { Write-Log "Error checking/removing PreventDeviceEncryption: $_" }
 
@@ -39,9 +39,9 @@ try {
 # 3. Keep FVE policies that disable TPM-less + auto-provision
 # ----------------------------------------------------------------------
 try {
-    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM"          /t REG_DWORD /d 0 /f | Out-Null
+    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f | Out-Null
     & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
-    Write-Log "BitLocker auto-provisioning policies applied (NoTPM=0, AutoProvision=0)."
+    Write-Log "BitLocker auto-provisioning policies applied (NoTPM=0 AutoProvision=0)."
 } catch { Write-Log "Failed to apply FVE policies: $_" }
 
 # ----------------------------------------------------------------------
@@ -50,12 +50,40 @@ try {
 try {
     $os = Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop
     if ($os.ProtectionStatus -eq 'On') {
-        Write-Log "BitLocker already active – suspending for remainder of OOBE."
+        Write-Log "BitLocker already active suspending for remainder of OOBE."
         Suspend-BitLocker -MountPoint 'C:' -RebootCount 0
     } else {
         Write-Log "BitLocker not active (as expected)."
     }
 } catch { Write-Log "Could not query BitLocker status: $_" }
 
+# ----------------------------------------------------------------------
+# 5. If volume is encrypted with XTS-AES 128-bit, decrypt it
+# ----------------------------------------------------------------------
+try {
+    $os = Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop
+    $encryptionMethod = $os.EncryptionMethod
+    $volumeStatus = $os.VolumeStatus
+    $protectionStatus = $os.ProtectionStatus
 
-Write-Log "===== OOBE Finalization complete – device ready for Intune BitLocker enforcement ====="
+    Write-Log "BitLocker check: EncryptionMethod = $encryptionMethod | VolumeStatus = $volumeStatus | ProtectionStatus = $protectionStatus"
+
+    if ($volumeStatus -ne 'FullyDecrypted' -and $encryptionMethod -eq 'XtsAes128') {
+        Write-Log "Volume is encrypted with XTS-AES 128-bit. Starting decryption."
+        Disable-BitLocker -MountPoint 'C:'
+
+        # Wait for decryption to complete
+        do {
+            Start-Sleep -Seconds 15
+            $status = (Get-BitLockerVolume -MountPoint 'C:').VolumeStatus
+            Write-Log "Decryption in progress. Current VolumeStatus: $status"
+        } while ($status -ne 'FullyDecrypted')
+
+        Write-Log "Decryption completed successfully."
+    } else {
+        Write-Log "No decryption needed. Either volume is not encrypted or encryption method is not XTS-AES 128-bit."
+    }
+} catch {
+    Write-Log "Error during encryption method check or decryption: $_"
+}
+
