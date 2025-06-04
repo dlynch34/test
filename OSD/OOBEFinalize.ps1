@@ -77,10 +77,8 @@ try {
     if ($wu.Status -ne 'Running') {
         throw "wuauserv did not start in time"
     }
-} catch {
-    Write-Log "Failed to ensure Windows Update service is running: $_"
-}
 
+    # Search and install available updates
     Write-Log "Searching for available updates using COM..."
     $updateSession = New-Object -ComObject Microsoft.Update.Session
     $updateSearcher = $updateSession.CreateUpdateSearcher()
@@ -105,7 +103,23 @@ try {
         $installer = $updateSession.CreateUpdateInstaller()
         $installer.Updates = $updates
         $result = $installer.Install()
+
+        Write-Log "Install result code: $($result.ResultCode) (0=NotStarted, 1=InProgress, 2=SucceededWithErrors, 3=Failed, 4=Succeeded)"
         Write-Log "Windows Updates installed: $($result.Updates.Count)"
+
+        for ($i = 0; $i -lt $result.Updates.Count; $i++) {
+            $update = $result.Updates.Item($i)
+            $updateResult = $result.GetUpdateResult($i).ResultCode
+
+            switch ($updateResult) {
+                2 { $status = "Succeeded with errors" }
+                3 { $status = "Failed" }
+                4 { $status = "Succeeded" }
+                default { $status = "Other (Code: $updateResult)" }
+            }
+
+            Write-Log "Update Result: $($update.Title) - $status"
+        }
     }
 } catch {
     Write-Log "Windows Update COM error: $_"
