@@ -55,18 +55,12 @@ if ($WindowsPhase -eq 'WinPE') {
     New-Item -Path $ScriptsPath -ItemType Directory -Force | Out-Null
     New-Item -Path $OOBECloudPath -ItemType Directory -Force | Out-Null
 
-    $OOBEDeployUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
-    $UnattendUrl        = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
-    $SetupCompleteUrl   = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/setupcomplete.cmd"
-    $OOBEFinalizeUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
+    # Define URLs
+    $OOBEDeployUrl    = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OSDeploy.OOBEDeploy.json"
+    $UnattendUrl      = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/Unattend.xml"
+    $OOBEFinalizeUrl  = "https://raw.githubusercontent.com/dlynch34/test/main/OSD/OOBEFinalize.ps1"
 
-    try {
-        Invoke-WebRequest -Uri $SetupCompleteUrl -OutFile (Join-Path $ScriptsPath "SetupComplete.cmd") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ setupcomplete.cmd downloaded"
-    } catch {
-        Write-Warning "⚠️ Failed to download setupcomplete.cmd: $_"
-    }
-
+    # Download OOBEDeploy
     try {
         $OOBEDeployPath = Join-Path $ProgramDataPath "OSDeploy"
         New-Item -Path $OOBEDeployPath -ItemType Directory -Force | Out-Null
@@ -76,6 +70,7 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download OSDeploy.OOBEDeploy.json: $_"
     }
 
+    # Download unattend.xml
     try {
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
         Write-Host -ForegroundColor Green "✅ Unattend.xml downloaded"
@@ -83,13 +78,28 @@ if ($WindowsPhase -eq 'WinPE') {
         Write-Warning "⚠️ Failed to download Unattend.xml: $_"
     }
 
+    # Download and set up OOBEFinalize.ps1 + SetupComplete.cmd
     try {
-        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile (Join-Path $OOBECloudPath "OOBEFinalize.ps1") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded to C:\OSD"
+        $OOBEFinalizeDst = Join-Path $ScriptsPath "OOBEFinalize.ps1"
+        $SetupCompletePath = Join-Path $ScriptsPath "SetupComplete.cmd"
+
+        # Download Finalize script to Setup\Scripts
+        Invoke-WebRequest -Uri $OOBEFinalizeUrl -OutFile $OOBEFinalizeDst -UseBasicParsing
+        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded to $OOBEFinalizeDst"
+
+        # Write SetupComplete.cmd that launches the finalization script
+        @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%SystemRoot%\Setup\Scripts\OOBEFinalize.ps1""
+exit /b 0
+"@ | Set-Content -Path $SetupCompletePath -Encoding ASCII -Force
+
+        Write-Host -ForegroundColor Green "✅ SetupComplete.cmd written to launch OOBEFinalize.ps1"
     } catch {
-        Write-Warning "⚠️ Failed to download OOBEFinalize.ps1: $_"
+        Write-Warning "⚠️ Failed to prepare OOBE finalization: $_"
     }
 
+    # Wrap-up and reboot
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
@@ -106,4 +116,3 @@ if ($WindowsPhase -eq 'WinPE') {
 #region Other Phases
 $null = Stop-Transcript -ErrorAction Ignore
 #endregion
-
