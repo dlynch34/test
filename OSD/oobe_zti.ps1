@@ -19,31 +19,42 @@ else {
     else {$WindowsPhase = 'Windows'}
 }
 
-Write-Host -ForegroundColor Green "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
+Write-Host "[+] $ScriptName $ScriptVersion ($WindowsPhase Phase)"
 #endregion
 
 #region Admin Elevation
 $whoiam = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $isElevated = ([System.Security.Principal.WindowsPrincipal] [System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole] "Administrator")
 if ($isElevated) {
-    Write-Host -ForegroundColor Green "[+] Running as $whoiam (Admin Elevated)"
+    Write-Host "[+] Running as $whoiam (Admin Elevated)"
 } else {
-    Write-Host -ForegroundColor Red "[!] Running as $whoiam (NOT Admin Elevated)"
+    Write-Host "[!] Running as $whoiam (NOT Admin Elevated)"
     break
 }
 #endregion
 
 #region TLS 1.2
-Write-Host -ForegroundColor Green "[+] Enabling TLS 1.2"
+Write-Host "[+] Enabling TLS 1.2"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 #endregion
 
 #region WinPE Phase
 if ($WindowsPhase -eq 'WinPE') {
-    Write-Host -ForegroundColor Cyan "[Test] Starting OSDCloud..."
+    Write-Host "[*] Starting OSDCloud..."
     Start-OSDCloud -ZTI -OSLanguage en-us -OSBuild 24H2 -OSEdition Enterprise -Verbose
 
-    Write-Host -ForegroundColor Cyan "[Test] Injecting OOBE files..."
+    # Inject PreventDeviceEncryption in offline registry
+    try {
+        Write-Host "[*] Injecting PreventDeviceEncryption=1 into offline registry..."
+        reg load HKLM\TempHive C:\Windows\System32\Config\SYSTEM
+        reg add "HKLM\TempHive\ControlSet001\Control\BitLocker" /v PreventDeviceEncryption /t REG_DWORD /d 1 /f
+        reg unload HKLM\TempHive
+        Write-Host "[+] Offline registry: PreventDeviceEncryption set"
+    } catch {
+        Write-Host "[!] Failed to inject PreventDeviceEncryption offline: $_"
+    }
+
+    Write-Host "[*] Injecting OOBE files..."
     $OSDrive = "C:"
     $ProgramDataPath = Join-Path $OSDrive "ProgramData"
     $PantherPath     = Join-Path $OSDrive "Windows\Panther"
@@ -65,17 +76,17 @@ if ($WindowsPhase -eq 'WinPE') {
         $OOBEDeployPath = Join-Path $ProgramDataPath "OSDeploy"
         New-Item -Path $OOBEDeployPath -ItemType Directory -Force | Out-Null
         Invoke-WebRequest -Uri $OOBEDeployUrl -OutFile (Join-Path $OOBEDeployPath "OSDeploy.OOBEDeploy.json") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ OSDeploy.OOBEDeploy.json downloaded"
+        Write-Host "[+] OSDeploy.OOBEDeploy.json downloaded"
     } catch {
-        Write-Warning "⚠️ Failed to download OSDeploy.OOBEDeploy.json: $_"
+        Write-Host "[!] Failed to download OSDeploy.OOBEDeploy.json: $_"
     }
 
     # Download Unattend.xml
     try {
         Invoke-WebRequest -Uri $UnattendUrl -OutFile (Join-Path $PantherPath "Unattend.xml") -UseBasicParsing
-        Write-Host -ForegroundColor Green "✅ Unattend.xml downloaded"
+        Write-Host "[+] Unattend.xml downloaded"
     } catch {
-        Write-Warning "⚠️ Failed to download Unattend.xml: $_"
+        Write-Host "[!] Failed to download Unattend.xml: $_"
     }
 
     # Download and prepare OOBEFinalize.ps1 and SetupComplete.cmd
@@ -86,7 +97,7 @@ if ($WindowsPhase -eq 'WinPE') {
         # Clean-download OOBEFinalize.ps1 without BOM
         $rawScript = Invoke-WebRequest -Uri $OOBEFinalizeUrl -UseBasicParsing
         $rawScript.Content | Set-Content -Path $OOBEFinalizeDst -Encoding UTF8
-        Write-Host -ForegroundColor Green "✅ OOBEFinalize.ps1 downloaded and cleaned (no BOM)"
+        Write-Host "[+] OOBEFinalize.ps1 downloaded and cleaned (no BOM)"
 
         # Write SetupComplete.cmd that runs OOBEFinalize.ps1
         @"
@@ -95,21 +106,21 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%SystemRoot%\Setup\Scr
 exit /b 0
 "@ | Set-Content -Path $SetupCompletePath -Encoding ASCII -Force
 
-        Write-Host -ForegroundColor Green "✅ SetupComplete.cmd written to launch OOBEFinalize.ps1"
+        Write-Host "[+] SetupComplete.cmd written to launch OOBEFinalize.ps1"
     } catch {
-        Write-Warning "⚠️ Failed to prepare OOBE finalization script: $_"
+        Write-Host "[!] Failed to prepare OOBE finalization script: $_"
     }
 
     # Wrap-up and reboot
     $null = Stop-Transcript -ErrorAction Ignore
 
     if (-not (Test-Path "C:\Windows")) {
-        Write-Host -ForegroundColor Red "[!] WARNING: C:\Windows not found. OS may have failed to stage."
+        Write-Host "[!] WARNING: C:\Windows not found. OS may have failed to stage."
     } else {
-        Write-Host -ForegroundColor Green "[+] Detected C:\Windows - OS appears staged successfully."
+        Write-Host "[+] Detected C:\Windows - OS appears staged successfully."
     }
 
-    Write-Host -ForegroundColor Green "Restarting..."
+    Write-Host "[+] Restarting..."
     wpeutil reboot
 }
 #endregion
