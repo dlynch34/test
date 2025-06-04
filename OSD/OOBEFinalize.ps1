@@ -1,5 +1,5 @@
 # ======================================================================
-# OOBE.ps1 Defer Windows auto-encryption, update OS, keep Intune free
+# OOBE.ps1 – Defer Windows auto-encryption, update OS, keep Intune free
 # ======================================================================
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
@@ -13,119 +13,72 @@ function Write-Log {
 Write-Log "===== Starting OOBE Finalization ====="
 
 # ----------------------------------------------------------------------
-# 1. Defer built-in XTS-AES-128 device-encryption during OOBE
+# 1. Disable OOBE device encryption runtime provisioning
 # ----------------------------------------------------------------------
 try {
     $provKey = 'HKLM:\SOFTWARE\Microsoft\Provisioning\Diagnostics\Config'
-    if (-not (Test-Path $provKey)) { New-Item -Path $provKey -Force | Out-Null }
+    if (-not (Test-Path $provKey)) {
+        New-Item -Path $provKey -Force | Out-Null
+    }
     Set-ItemProperty -Path $provKey -Name 'DisableRuntimeProvisioning' -Value 1 -Type DWord -Force
-    Write-Log "Set DisableRuntimeProvisioning = 1 (device-encryption will not run in OOBE)."
-} catch { Write-Log "Failed to set DisableRuntimeProvisioning: $_" }
+    Write-Log "Set DisableRuntimeProvisioning = 1 (blocks auto-encryption during OOBE)"
+} catch {
+    Write-Log "Failed to set DisableRuntimeProvisioning: $_"
+}
 
 # ----------------------------------------------------------------------
-# 2. Remove PreventDeviceEncryption if present (unblocks Intune BitLocker)
+# 2. Optional: Remove PreventDeviceEncryption if present
 # ----------------------------------------------------------------------
 try {
     $blCtrl = 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker'
     if (Get-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -ErrorAction SilentlyContinue) {
         Remove-ItemProperty -Path $blCtrl -Name 'PreventDeviceEncryption' -Force
-        Write-Log "Removed legacy PreventDeviceEncryption flag."
-    } else {
-        Write-Log "PreventDeviceEncryption not present - nothing to remove."
-    }
-} catch { Write-Log "Error checking/removing PreventDeviceEncryption: $_" }
-
-# ----------------------------------------------------------------------
-# 3. Keep FVE policies that disable TPM-less + auto-provision
-# ----------------------------------------------------------------------
-try {
-    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithNoTPM" /t REG_DWORD /d 0 /f | Out-Null
-    & reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v "EnableBDEWithAutoProvisioning" /t REG_DWORD /d 0 /f | Out-Null
-    Write-Log "BitLocker auto-provisioning policies applied (NoTPM=0 AutoProvision=0)."
-} catch { Write-Log "Failed to apply FVE policies: $_" }
-
-# ----------------------------------------------------------------------
-# 4. If BitLocker already active, suspend until staging is done
-# ----------------------------------------------------------------------
-try {
-    $os = Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop
-    if ($os.ProtectionStatus -eq 'On') {
-        Write-Log "BitLocker already active suspending for remainder of OOBE."
-        Suspend-BitLocker -MountPoint 'C:' -RebootCount 0
-    } else {
-        Write-Log "BitLocker not active (as expected)."
-    }
-} catch { Write-Log "Could not query BitLocker status: $_" }
-
-# ----------------------------------------------------------------------
-# 5. If volume is encrypted with XTS-AES 128-bit, decrypt it
-# ----------------------------------------------------------------------
-try {
-    $os = Get-BitLockerVolume -MountPoint 'C:' -ErrorAction Stop
-    $encryptionMethod = $os.EncryptionMethod
-    $volumeStatus = $os.VolumeStatus
-    $protectionStatus = $os.ProtectionStatus
-
-    Write-Log "BitLocker check: EncryptionMethod = $encryptionMethod | VolumeStatus = $volumeStatus | ProtectionStatus = $protectionStatus"
-
-    if ($volumeStatus -ne 'FullyDecrypted' -and $encryptionMethod -eq 'XtsAes128') {
-        Write-Log "Volume is encrypted with XTS-AES 128-bit. Starting decryption."
-        Disable-BitLocker -MountPoint 'C:'
-
-        # Wait for decryption to complete
-        do {
-            Start-Sleep -Seconds 15
-            $status = (Get-BitLockerVolume -MountPoint 'C:').VolumeStatus
-            Write-Log "Decryption in progress. Current VolumeStatus: $status"
-        } while ($status -ne 'FullyDecrypted')
-
-        Write-Log "Decryption completed successfully."
-    } else {
-        Write-Log "No decryption needed. Either volume is not encrypted or encryption method is not XTS-AES 128-bit."
+        Write-Log "Removed PreventDeviceEncryption legacy value"
     }
 } catch {
-    Write-Log "Error during encryption method check or decryption: $_"
+    Write-Log "Error removing PreventDeviceEncryption: $_"
 }
 
-# ─────── Windows Update via COM object (works during OOBE) ───────
+# ----------------------------------------------------------------------
+# 3. Trigger Windows Updates using COM (works during OOBE)
+# ----------------------------------------------------------------------
 try {
-    Write-Log "Ensuring Windows Update service (wuauserv) is started..."
+    Write-Log "Starting Windows Update COM process..."
 
     $wu = Get-Service -Name wuauserv -ErrorAction Stop
     if ($wu.Status -ne 'Running') {
         Set-Service -Name wuauserv -StartupType Automatic
         Start-Service -Name wuauserv
-        Write-Log "Windows Update service started."
+        Write-Log "Windows Update service started"
     } else {
-        Write-Log "Windows Update service already running."
+        Write-Log "Windows Update service already running"
     }
 
-    Write-Log "Using COM object to trigger Windows Update…"
     $updateSession = New-Object -ComObject Microsoft.Update.Session
     $updateSearcher = $updateSession.CreateUpdateSearcher()
     $searchResult = $updateSearcher.Search("IsInstalled=0 and Type='Software'")
 
     if ($searchResult.Updates.Count -eq 0) {
-        Write-Log "No applicable updates found."
+        Write-Log "No applicable updates found"
     } else {
-        Write-Log "Found $($searchResult.Updates.Count) update(s) to install."
+        Write-Log "$($searchResult.Updates.Count) update(s) found"
 
-        $updatesToDownload = New-Object -ComObject Microsoft.Update.UpdateColl
-        foreach ($update in $searchResult.Updates) {
-            $updatesToDownload.Add($update) | Out-Null
-            Write-Log "Queued: $($update.Title)"
+        $updates = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($u in $searchResult.Updates) {
+            $updates.Add($u) | Out-Null
+            Write-Log "Queued: $($u.Title)"
         }
 
         $downloader = $updateSession.CreateUpdateDownloader()
-        $downloader.Updates = $updatesToDownload
+        $downloader.Updates = $updates
         $downloader.Download()
 
         $installer = $updateSession.CreateUpdateInstaller()
-        $installer.Updates = $updatesToDownload
-        $installationResult = $installer.Install()
+        $installer.Updates = $updates
+        $result = $installer.Install()
 
-        Write-Log "Updates installed: $($installationResult.Updates.Count)"
+        Write-Log "Windows Updates installed: $($result.Updates.Count)"
     }
 } catch {
-    Write-Log "Error applying updates via COM"
+    Write-Log "Windows Update COM error: $_"
 }
