@@ -1,0 +1,118 @@
+# ==================== CONFIGURATION ====================
+$TenantId     = 'fb1f5cc5-be84-4881-b037-2d641aea97fd'
+$ClientId     = '26b27905-7fed-4ade-a123-18f526bf6c64'
+$ClientSecret = 'LhBv.6.-uIdgU6eFOSw8.FC237ebzsVZT.'
+$GraphScope   = 'https://graph.microsoft.us/.default'
+$GraphUrl     = 'https://graph.microsoft.us'
+$DEM_UPN      = 'DeviceEnrollmentAccount1@serco-na.us'
+$LogFilePath  = "C:\ProgramData\BitLockerPinAutomation_$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
+
+# ==================== CREATE LOGGING FUNCTION ====================
+function Log-Message {
+    param (
+        [string]$message
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    # Remove emoji and non-alphanumeric characters (except spaces)
+    $cleanMessage = $message -replace '[^\w\s]', ''
+    $logMessage = "$timestamp - $cleanMessage"
+    Add-Content -Path $LogFilePath -Value "$logMessage"
+    Write-Host $logMessage
+}
+
+# ==================== GET AUTH TOKEN ====================
+$AuthUrl = "https://login.microsoftonline.us/$TenantId/oauth2/v2.0/token"
+
+$Body = @{
+    client_id     = $ClientId
+    scope         = $GraphScope
+    client_secret = $ClientSecret
+    grant_type    = 'client_credentials'
+}
+
+try {
+    $TokenResponse = Invoke-RestMethod -Method Post -Uri $AuthUrl -Body $Body -ContentType 'application/x-www-form-urlencoded'
+    $Headers = @{ Authorization = "Bearer $($TokenResponse.access_token)" }
+    Log-Message "Auth token acquired successfully."
+} catch {
+    Log-Message "❌ Failed to get token: $_"
+    exit 1
+}
+
+# ==================== GET DEVICE INFO ====================
+$DeviceName = $env:COMPUTERNAME  # Get the current machine's name
+Log-Message "Device Name: $DeviceName"
+
+try {
+    $DeviceResponse = Invoke-RestMethod -Method Get -Uri "$GraphUrl/beta/deviceManagement/managedDevices?`$filter=deviceName eq '$DeviceName'" -Headers $Headers
+    $Device = $DeviceResponse.value[0]
+} catch {
+    Log-Message "❌ Failed to query Intune for device: $_"
+    exit 1
+}
+
+if (-not $Device) {
+    Log-Message "❌ Device not found in Intune."
+    exit 1
+}
+
+$UserId = $Device.userId
+$DeviceName = $Device.deviceName
+Log-Message "Found device: $DeviceName"
+Log-Message "Assigned user ID: $UserId"
+
+# ==================== GET USER INFO ====================
+try {
+    $User = Invoke-RestMethod -Method Get -Uri "$GraphUrl/beta/users/$UserId" -Headers $Headers
+} catch {
+    Log-Message "❌ Failed to get user details from Graph API: $_"
+    exit 1
+}
+
+# Correctly assign UserPrincipalName (email address)
+$UserPrincipalName = $User.userPrincipalName
+$EmployeeId = $User.employeeId
+
+# Log the correct full email address
+Log-Message "Assigned User (UPN): $($UserPrincipalName)"
+Log-Message "Employee ID: $EmployeeId"
+
+# ==================== DEM ACCOUNT CHECK ====================
+if ($UserPrincipalName -ieq $DEM_UPN) {
+    Log-Message "Assigned to DEM account — skipping BitLocker PIN setup."
+    exit 0
+}
+
+# ==================== SIMULATE PIN GENERATION ====================
+# Clean the Employee ID (remove any non-numeric characters like emojis)
+$CleanEmployeeId = $EmployeeId -replace '\D', ''  # Remove non-digits
+$FormattedPIN = $CleanEmployeeId.PadLeft(8, '0').Substring(0,8) # Make sure it's 8 digits
+
+Log-Message "Generating BitLocker PIN for ${UserPrincipalName}: ${FormattedPIN}"
+
+# ==================== CHECK CURRENT BITLOCKER PIN ====================
+$BitLockerStatus = Get-BitLockerVolume -MountPoint "C:"
+
+if ($BitLockerStatus.ProtectionStatus -eq 'On') {
+    Log-Message "BitLocker is already enabled."
+    
+    # Check if a TPM+PIN protector is already set
+    $ExistingProtector = (Get-BitLockerVolume -MountPoint "C:").KeyProtector | Where-Object { $_.KeyProtectorType -eq 'TpmPin' }
+
+    if ($ExistingProtector) {
+        Log-Message "A BitLocker PIN is already set. No changes will be made."
+    } else {
+        Log-Message "No PIN protector is set. Adding a PIN protector with PIN: $FormattedPIN"
+        
+        # Add a PIN protector
+        $SecureStringPin = ConvertTo-SecureString -String $FormattedPIN -AsPlainText -Force
+        try {
+            Add-BitLockerKeyProtector -MountPoint "C:" -TpmAndPinProtector -Pin $SecureStringPin
+            Log-Message "BitLocker PIN protector added with PIN: $FormattedPIN"
+        } catch {
+            Log-Message "❌ Failed to add BitLocker PIN protector: $_"
+        }
+    }
+} else {
+    Log-Message "❌ BitLocker is not enabled. Skipping PIN assignment."
+}
