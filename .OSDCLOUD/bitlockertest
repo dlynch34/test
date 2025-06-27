@@ -1,10 +1,5 @@
 # ==================== CONFIGURATION ====================
-$TenantId     = 'fb1f5cc5-be84-4881-b037-2d641aea97fd'
-$ClientId     = '26b27905-7fed-4ade-a123-18f526bf6c64'
-$ClientSecret = 'LhBv.6.-uIdgU6eFOSw8.FC237ebzsVZT.'
-$GraphScope   = 'https://graph.microsoft.us/.default'
-$GraphUrl     = 'https://graph.microsoft.us'
-$DEM_UPN      = 'DeviceEnrollmentAccount1@serco-na.us'
+
 $LogFilePath  = "C:\ProgramData\BitLockerPinAutomation_$(Get-Date -Format 'yyyy-MM-dd_HH-mm-ss').log"
 
 # ==================== CREATE LOGGING FUNCTION ====================
