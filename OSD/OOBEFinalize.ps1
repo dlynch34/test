@@ -155,4 +155,32 @@ try {
     Write-Log "Failed to run dsregcmd."
 }
 
+# ----------------------------------------------------------------------
+# 8. Optional – Disable Microsoft Store and OS Upgrades
+# ----------------------------------------------------------------------
+try {
+    $storePolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore"
+    if (-not (Test-Path $storePolicyKey)) {
+        New-Item -Path $storePolicyKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $storePolicyKey -Name "RemoveWindowsStore" -Value 1 -Type DWord -Force
+    Write-Log "RemoveWindowsStore = 1 applied successfully."
+} catch {
+    Write-Log "Failed to set RemoveWindowsStore: $_"
+}
+
+try {
+    $wuPolicyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate"
+    if (-not (Test-Path $wuPolicyKey)) {
+        New-Item -Path $wuPolicyKey -Force | Out-Null
+    }
+    Set-ItemProperty -Path $wuPolicyKey -Name "DisableOSUpgrade" -Value 1 -Type DWord -Force
+    Write-Log "DisableOSUpgrade = 1 applied successfully."
+} catch {
+    Write-Log "Failed to set DisableOSUpgrade: $_"
+}
+
+
+
 Write-Log "===== OOBE Finalization Complete ====="
+
